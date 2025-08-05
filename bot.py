@@ -1,53 +1,70 @@
-from aiogram import Bot, Dispatcher, executor, types
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram import Bot, Dispatcher, types
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.utils import executor
+from aiogram.dispatcher.filters import CommandStart
 import os
+import json
 
-API_TOKEN = os.getenv("API_TOKEN")
+API_TOKEN = os.getenv("API_TOKEN") or "YOUR_API_TOKEN"
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
-# Реплай-кнопки (горизонтальные строки)
-keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+# Файл подписчиков
+SUBSCRIBERS_FILE = "subscribers.json"
 
-row1 = [KeyboardButton("Спорт"), KeyboardButton("Новости Профкома")]
-row2 = [KeyboardButton("ОТиПБ"), KeyboardButton("Фабрика идей")]
-row3 = [KeyboardButton("Что такое БСА")]
+def load_subscribers():
+    if not os.path.exists(SUBSCRIBERS_FILE):
+        return []
+    with open(SUBSCRIBERS_FILE, "r") as f:
+        return json.load(f)
 
-keyboard.row(*row1)
-keyboard.row(*row2)
-keyboard.row(*row3)
+def save_subscribers(subscribers):
+    with open(SUBSCRIBERS_FILE, "w") as f:
+        json.dump(subscribers, f)
 
-@dp.message_handler(commands=['start'])
+# Реплай-кнопка "Каналы"
+menu_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+menu_keyboard.add(KeyboardButton("📢 Каналы"))
+
+# Инлайн-кнопки со ссылками на каналы
+inline_links = InlineKeyboardMarkup(row_width=1).add(
+    InlineKeyboardButton(text="Спорт", url="https://t.me/sportsoda"),
+    InlineKeyboardButton(text="Новости Профкома", url="https://t.me/profkomsoda"),
+    InlineKeyboardButton(text="ОТиПБ", url="https://t.me/your_invest_channel"),
+    InlineKeyboardButton(text="Фабрика идей", url="https://t.me/your_invest_channel"),
+    InlineKeyboardButton(text="Что такое БСА", url="https://t.me/your_invest_channel")
+)
+
+@dp.message_handler(CommandStart())
 async def start_handler(message: types.Message):
-    caption = "👋 Добро пожаловать в наш бот! Выберите интересующую вас тему ниже:"
-    photo_path = "welcome.jpg"  # Убедись, что файл есть
+    subscribers = load_subscribers()
+    if message.from_user.id not in subscribers:
+        subscribers.append(message.from_user.id)
+        save_subscribers(subscribers)
+
+    photo_path = "welcome.jpg"
+    caption = "👋 Добро пожаловать! Нажмите 📢 Каналы, чтобы выбрать интересующий."
 
     try:
-        with open(photo_path, 'rb') as photo:
-            await message.answer_photo(photo=photo, caption=caption, reply_markup=keyboard)
+        with open(photo_path, "rb") as photo:
+            await message.answer_photo(photo, caption=caption, reply_markup=menu_keyboard)
     except FileNotFoundError:
-        await message.answer(caption, reply_markup=keyboard)
+        await message.answer(caption, reply_markup=menu_keyboard)
 
-# Обработка нажатий на кнопки
-@dp.message_handler(lambda message: message.text == "Спорт")
-async def handle_sport(message: types.Message):
-    await message.answer("Ссылка на спорт-канал: https://t.me/sportsoda")
+@dp.message_handler(lambda msg: msg.text == "📢 Каналы")
+async def send_inline_links(message: types.Message):
+    await message.answer("Выберите канал:", reply_markup=inline_links)
 
-@dp.message_handler(lambda message: message.text == "Новости Профкома")
-async def handle_news(message: types.Message):
-    await message.answer("Ссылка на новости профкома: https://t.me/profkomsoda")
+# Рассылка новых постов из канала подписчикам
+@dp.channel_post_handler()
+async def channel_post_handler(message: types.Message):
+    text = f"🆕 Новость из канала:\n\n{message.text or 'Без текста'}"
+    subscribers = load_subscribers()
+    for user_id in subscribers:
+        try:
+            await bot.send_message(chat_id=user_id, text=text)
+        except:
+            continue
 
-@dp.message_handler(lambda message: message.text == "ОТиПБ")
-async def handle_otipb(message: types.Message):
-    await message.answer("Ссылка на ОТиПБ: https://t.me/your_invest_channel")
-
-@dp.message_handler(lambda message: message.text == "Фабрика идей")
-async def handle_factory(message: types.Message):
-    await message.answer("Ссылка на фабрику идей: https://t.me/your_invest_channel")
-
-@dp.message_handler(lambda message: message.text == "Что такое БСА")
-async def handle_bsa(message: types.Message):
-    await message.answer("Ссылка на БСА: https://t.me/your_invest_channel")
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
