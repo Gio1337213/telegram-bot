@@ -58,34 +58,16 @@ async def forward_to_users(post: types.Message):
 
     for user_id in users:
         try:
-            if post.content_type == 'photo':
-                await bot.send_photo(
-                    user_id,
-                    photo=post.photo[-1].file_id,
-                    caption=from_info + (post.caption or ""),
-                    parse_mode="HTML"
-                )
-            elif post.content_type == 'video':
-                await bot.send_video(
-                    user_id,
-                    video=post.video.file_id,
-                    caption=from_info + (post.caption or ""),
-                    parse_mode="HTML"
-                )
-            elif post.content_type == 'text':
-                await bot.send_message(
-                    user_id,
-                    from_info + post.text,
-                    parse_mode="HTML"
-                )
-            else:
-                await bot.send_message(
-                    user_id,
-                    f"{from_info}📌 Новый пост в канале (тип: {post.content_type})",
-                    parse_mode="HTML"
-                )
+            if message.content_type == "photo":
+                await bot.send_photo(chat_id=user_id, photo=message.photo[-1].file_id, caption=message.caption or "")
+            elif message.content_type == "video":
+                await bot.send_video(chat_id=user_id, video=message.video.file_id, caption=message.caption or "")
+            elif message.content_type == "document":
+                await bot.send_document(chat_id=user_id, document=message.document.file_id, caption=message.caption or "")
+            elif message.content_type == "text":
+                await bot.send_message(chat_id=user_id, text=message.text)
         except Exception as e:
-            print(f"❌ Ошибка при рассылке пользователю {user_id}: {e}")
+            print(f"❌ Ошибка отправки пользователю {user_id}: {e}")
 
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
