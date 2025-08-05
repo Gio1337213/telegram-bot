@@ -1,24 +1,16 @@
 from aiogram import Bot, Dispatcher, executor, types
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-import logging
-import os
 
-API_TOKEN = os.getenv("BOT_TOKEN")
-
-logging.basicConfig(level=logging.INFO)
+API_TOKEN = "ТОКЕН_БОТА"
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
 @dp.message_handler(commands=['start'])
-async def start_command(message: types.Message):
-    keyboard = InlineKeyboardMarkup(row_width=1)
-    keyboard.add(
-        InlineKeyboardButton("📚 Образование", url="https://t.me/education_channel"),
-        InlineKeyboardButton("🎮 Игры", url="https://t.me/gaming_channel"),
-        InlineKeyboardButton("🎨 Арт", url="https://t.me/art_channel")
-    )
-    await message.answer("Выберите тематику:", reply_markup=keyboard)
+async def send_welcome(message: types.Message):
+    keyboard = types.InlineKeyboardMarkup()
+    keyboard.add(types.InlineKeyboardButton(text="💡 Канал про ИТ", url="https://t.me/your_it_channel"))
+    keyboard.add(types.InlineKeyboardButton(text="📈 Канал про инвестиции", url="https://t.me/your_invest_channel"))
+    await message.answer("Выберите интересующую тему:", reply_markup=keyboard)
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
