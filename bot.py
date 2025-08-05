@@ -55,18 +55,28 @@ async def forward_channel_post(message: types.Message):
     with open(USERS_FILE, "r") as f:
         users = json.load(f)
 
+    # Получаем название канала или username
+    channel_name = message.chat.title
+    channel_username = message.chat.username
+    channel_ref = f"@{channel_username}" if channel_username else channel_name
+    prefix = f"📢 Канал: {channel_ref}"
+
     for user_id in users:
         try:
             if message.content_type == "photo":
-                await bot.send_photo(chat_id=user_id, photo=message.photo[-1].file_id, caption=message.caption or "")
+                caption = f"{message.caption or ''}\n\n{prefix}"
+                await bot.send_photo(chat_id=user_id, photo=message.photo[-1].file_id, caption=caption)
             elif message.content_type == "video":
-                await bot.send_video(chat_id=user_id, video=message.video.file_id, caption=message.caption or "")
+                caption = f"{message.caption or ''}\n\n{prefix}"
+                await bot.send_video(chat_id=user_id, video=message.video.file_id, caption=caption)
             elif message.content_type == "document":
-                await bot.send_document(chat_id=user_id, document=message.document.file_id, caption=message.caption or "")
+                caption = f"{message.caption or ''}\n\n{prefix}"
+                await bot.send_document(chat_id=user_id, document=message.document.file_id, caption=caption)
             elif message.content_type == "text":
-                await bot.send_message(chat_id=user_id, text=message.text)
+                await bot.send_message(chat_id=user_id, text=f"{message.text}\n\n{prefix}")
         except Exception as e:
             print(f"❌ Ошибка отправки пользователю {user_id}: {e}")
+
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
