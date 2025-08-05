@@ -1,21 +1,24 @@
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.utils import executor
+import logging
 import os
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-bot = Bot(token=BOT_TOKEN)
+API_TOKEN = os.getenv("BOT_TOKEN")
+
+logging.basicConfig(level=logging.INFO)
+
+bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
-@dp.message_handler(commands=["start"])
-async def start_cmd(message: types.Message):
+@dp.message_handler(commands=['start'])
+async def start_command(message: types.Message):
     keyboard = InlineKeyboardMarkup(row_width=1)
     keyboard.add(
-        InlineKeyboardButton("💡 Канал по саморазвитию", url="https://t.me/selfdev_channel"),
-        InlineKeyboardButton("📈 Канал про инвестиции", url="https://t.me/invest_channel"),
-        InlineKeyboardButton("🧠 Канал про психологию", url="https://t.me/psychology_channel")
+        InlineKeyboardButton("📚 Образование", url="https://t.me/education_channel"),
+        InlineKeyboardButton("🎮 Игры", url="https://t.me/gaming_channel"),
+        InlineKeyboardButton("🎨 Арт", url="https://t.me/art_channel")
     )
-    await message.answer("Выберите интересующий вас канал 👇", reply_markup=keyboard)
+    await message.answer("Выберите тематику:", reply_markup=keyboard)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
