@@ -58,16 +58,13 @@ async def forward_to_users(post: types.Message):
 
     for user_id in users:
         try:
-            if message.content_type == "photo":
-                await bot.send_photo(chat_id=user_id, photo=message.photo[-1].file_id, caption=message.caption or "")
-            elif message.content_type == "video":
-                await bot.send_video(chat_id=user_id, video=message.video.file_id, caption=message.caption or "")
-            elif message.content_type == "document":
-                await bot.send_document(chat_id=user_id, document=message.document.file_id, caption=message.caption or "")
-            elif message.content_type == "text":
-                await bot.send_message(chat_id=user_id, text=message.text)
+            await bot.copy_message(
+                chat_id=user_id,
+                from_chat_id=post.chat.id,
+                message_id=post.message_id
+            )
         except Exception as e:
-            print(f"❌ Ошибка отправки пользователю {user_id}: {e}")
+            print(f"Ошибка при рассылке пользователю {user_id}: {e}")
 
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
