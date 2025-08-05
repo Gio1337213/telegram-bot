@@ -1,8 +1,9 @@
 services:
   - type: web
     name: telegram-bot
-    env: docker
-    plan: free
-    region: frankfurt
-    branch: main
-    repo: https://github.com/Gio1337213/test.git
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: API_TOKEN
+        value: 8242497097:AAHhrMcmh6MfnQ2ym1CaJ5FMwoCYypdtk1c
