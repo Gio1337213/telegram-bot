@@ -1,81 +1,95 @@
 import os
 import json
-from aiogram import Bot, Dispatcher, executor, types
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.dispatcher.filters import CommandStart
+from aiogram import Bot, Dispatcher, types
+from aiogram.utils import executor
+from aiogram.types import (
+    ReplyKeyboardMarkup, KeyboardButton,
+    InlineKeyboardMarkup, InlineKeyboardButton
+)
 
-API_TOKEN = os.getenv("API_TOKEN")
-USERS_FILE = "users.json"
+API_TOKEN = os.getenv("API_TOKEN")  # Используется переменная окружения
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
-# Реплай-клавиатура
-reply_kb = ReplyKeyboardMarkup(resize_keyboard=True)
-reply_kb.add(KeyboardButton("📢 Каналы"))
+USERS_FILE = "users.json"
 
-# Инлайн-кнопки
-inline_kb = InlineKeyboardMarkup(row_width=1).add(
-    InlineKeyboardButton("Спорт", url="https://t.me/sportsoda"),
-    InlineKeyboardButton("Новости Профкома", url="https://t.me/profkomsoda"),
-    InlineKeyboardButton("ОТиПБ", url="https://t.me/your_invest_channel"),
-    InlineKeyboardButton("Фабрика идей", url="https://t.me/your_invest_channel"),
-    InlineKeyboardButton("Что такое БСА", url="https://t.me/your_invest_channel")
-)
+# Кнопка "Каналы"
+menu_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+menu_keyboard.add(KeyboardButton("Каналы"))
 
-# Убедись, что файл users.json существует
-if not os.path.exists(USERS_FILE):
-    with open(USERS_FILE, "w") as f:
-        json.dump([], f)
 
-# Команда /start
-@dp.message_handler(CommandStart())
-async def send_welcome(message: types.Message):
-    # Добавляем пользователя в users.json
-    with open(USERS_FILE, "r") as f:
-        users = json.load(f)
+@dp.message_handler(commands=['start'])
+async def start_handler(message: types.Message):
+    # Сохраняем пользователя
+    user_id = message.from_user.id
+    if os.path.exists(USERS_FILE):
+        with open(USERS_FILE, "r") as f:
+            users = json.load(f)
+    else:
+        users = []
 
-    if message.from_user.id not in users:
-        users.append(message.from_user.id)
+    if user_id not in users:
+        users.append(user_id)
         with open(USERS_FILE, "w") as f:
             json.dump(users, f)
 
     # Приветствие
-    caption = "👋 Добро пожаловать!\n\nНажмите кнопку ниже, чтобы выбрать канал:"
-    await message.answer(caption, reply_markup=reply_kb)
+    caption = "👋 Добро пожаловать!\nВыберите действие:"
+    photo_path = "welcome.jpg"
 
-# Обработка кнопки "Каналы"
-@dp.message_handler(lambda message: message.text == "📢 Каналы")
+    if os.path.exists(photo_path):
+        with open(photo_path, 'rb') as photo:
+            await message.answer_photo(photo, caption=caption, reply_markup=menu_keyboard)
+    else:
+        await message.answer(caption, reply_markup=menu_keyboard)
+
+
+@dp.message_handler(lambda msg: msg.text == "Каналы")
 async def show_channels(message: types.Message):
-    await message.answer("Выберите канал:", reply_markup=inline_kb)
+    inline_kb = InlineKeyboardMarkup(row_width=1)
+    inline_kb.add(
+        InlineKeyboardButton("Спорт", url="https://t.me/sportsoda"),
+        InlineKeyboardButton("Новости Профкома", url="https://t.me/profkomsoda"),
+        InlineKeyboardButton("ОТиПБ", url="https://t.me/your_invest_channel"),
+        InlineKeyboardButton("Фабрика идей", url="https://t.me/your_invest_channel"),
+        InlineKeyboardButton("Что такое БСА", url="https://t.me/your_invest_channel")
+    )
+    await message.answer("📌 Наши каналы:", reply_markup=inline_kb)
 
-# РАССЫЛКА из канала — бот должен быть админом!
+
 @dp.channel_post_handler()
 async def forward_channel_post(message: types.Message):
-    with open(USERS_FILE, "r") as f:
-        users = json.load(f)
+    if not os.path.exists(USERS_FILE):
+        return
 
-    # Получаем название канала или username
-    channel_name = message.chat.title
+    with open(USERS_FILE, "r") as f:
+        try:
+            users = json.load(f)
+        except json.JSONDecodeError:
+            return
+
+    # Получаем подпись канала
+    channel_title = message.chat.title or "Канал"
     channel_username = message.chat.username
-    channel_ref = f"@{channel_username}" if channel_username else channel_name
-    prefix = f"📢 Канал: {channel_ref}"
+    channel_ref = f"@{channel_username}" if channel_username else channel_title
+    footer = f"\n\n📢 Из канала: {channel_ref}"
 
     for user_id in users:
         try:
             if message.content_type == "photo":
-                caption = f"{message.caption or ''}\n\n{prefix}"
+                caption = (message.caption or "") + footer
                 await bot.send_photo(chat_id=user_id, photo=message.photo[-1].file_id, caption=caption)
             elif message.content_type == "video":
-                caption = f"{message.caption or ''}\n\n{prefix}"
+                caption = (message.caption or "") + footer
                 await bot.send_video(chat_id=user_id, video=message.video.file_id, caption=caption)
             elif message.content_type == "document":
-                caption = f"{message.caption or ''}\n\n{prefix}"
+                caption = (message.caption or "") + footer
                 await bot.send_document(chat_id=user_id, document=message.document.file_id, caption=caption)
             elif message.content_type == "text":
-                await bot.send_message(chat_id=user_id, text=f"{message.text}\n\n{prefix}")
+                await bot.send_message(chat_id=user_id, text=message.text + footer)
         except Exception as e:
-            print(f"❌ Ошибка отправки пользователю {user_id}: {e}")
+            print(f"❌ Не удалось отправить сообщение {user_id}: {e}")
 
 
 if __name__ == '__main__':
