@@ -50,14 +50,24 @@ async def channels_handler(message: types.Message):
 # Авторассылка новых постов из каналов
 @dp.channel_post_handler()
 async def handle_channel_post(message: types.Message):
-    print(f"Получено сообщение из канала {message.chat.id}: {message.text or 'фото/видео'}")
     users = load_users()
+
     for user_id in users:
         try:
-            await bot.copy_message(chat_id=user_id, from_chat_id=message.chat.id, message_id=message.message_id)
-            print(f"Отправлено пользователю {user_id}")
+            if message.text:
+                await bot.send_message(user_id, message.text)
+            elif message.photo:
+                await bot.send_photo(user_id, photo=message.photo[-1].file_id, caption=message.caption or "")
+            elif message.video:
+                await bot.send_video(user_id, video=message.video.file_id, caption=message.caption or "")
+            elif message.document:
+                await bot.send_document(user_id, document=message.document.file_id, caption=message.caption or "")
+            elif message.animation:
+                await bot.send_animation(user_id, animation=message.animation.file_id, caption=message.caption or "")
+            else:
+                print("Неизвестный тип сообщения")
         except Exception as e:
-            print(f"❌ Ошибка для пользователя {user_id}: {e}")
+            print(f"Ошибка при отправке пользователю {user_id}: {e}")
             continue
 
 if __name__ == '__main__':
