@@ -47,6 +47,10 @@ async def show_channels(message: types.Message):
 # Пересылка постов из каналов
 @dp.channel_post_handler()
 async def forward_to_users(post: types.Message):
+    print("📩 Новое сообщение в канале!")
+    print("Тип контента:", post.content_type)
+    print("ID сообщения:", post.message_id)
+    print("ID канала:", post.chat.id)
     users = load_users()
 
     # Получаем название канала
