@@ -49,7 +49,7 @@ async def show_channels(message: types.Message):
 async def forward_to_users(post: types.Message):
     users = load_users()
 
-    # Подпись для заголовка (если доступен channel username/title)
+    # Получаем название канала
     try:
         channel = await bot.get_chat(post.chat.id)
         from_info = f"<b>📢 Канал:</b> {channel.title}\n\n"
@@ -58,20 +58,34 @@ async def forward_to_users(post: types.Message):
 
     for user_id in users:
         try:
-            if post.text:
-                await bot.send_message(user_id, from_info + post.text)
-            elif post.photo:
-                await bot.send_photo(user_id, post.photo[-1].file_id, caption=from_info + (post.caption or ""))
-            elif post.video:
-                await bot.send_video(user_id, post.video.file_id, caption=from_info + (post.caption or ""))
-            elif post.document:
-                await bot.send_document(user_id, post.document.file_id, caption=from_info + (post.caption or ""))
-            elif post.animation:
-                await bot.send_animation(user_id, post.animation.file_id, caption=from_info + (post.caption or ""))
+            if post.content_type == 'photo':
+                await bot.send_photo(
+                    user_id,
+                    photo=post.photo[-1].file_id,
+                    caption=from_info + (post.caption or ""),
+                    parse_mode="HTML"
+                )
+            elif post.content_type == 'video':
+                await bot.send_video(
+                    user_id,
+                    video=post.video.file_id,
+                    caption=from_info + (post.caption or ""),
+                    parse_mode="HTML"
+                )
+            elif post.content_type == 'text':
+                await bot.send_message(
+                    user_id,
+                    from_info + post.text,
+                    parse_mode="HTML"
+                )
             else:
-                await bot.send_message(user_id, f"{from_info}📌 Новый пост в канале.")
+                await bot.send_message(
+                    user_id,
+                    f"{from_info}📌 Новый пост в канале (тип: {post.content_type})",
+                    parse_mode="HTML"
+                )
         except Exception as e:
-            print(f"❌ Ошибка при отправке пользователю {user_id}: {e}")
+            print(f"❌ Ошибка при рассылке пользователю {user_id}: {e}")
 
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
