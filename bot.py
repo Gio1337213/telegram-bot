@@ -1,60 +1,90 @@
+from aiogram import Bot, Dispatcher, types
+from aiogram.utils import executor
+import aiohttp
 import os
 import json
-from aiogram import Bot, Dispatcher, executor, types
-from aiogram.dispatcher.filters import CommandStart
-from aiogram.utils.exceptions import BotBlocked, ChatNotFound
 
 API_TOKEN = os.getenv("API_TOKEN")
-
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
+# Файл с базой пользователей
 USERS_FILE = "users.json"
+if os.path.exists(USERS_FILE):
+    with open(USERS_FILE, "r") as f:
+        users = json.load(f)
+else:
+    users = []
 
-# Загружаем подписчиков из файла
-def load_users():
-    if os.path.exists(USERS_FILE):
-        with open(USERS_FILE, "r") as f:
-            return json.load(f)
-    return []
+# --- Клавиатуры ---
+reply_keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+reply_keyboard.add(types.KeyboardButton("📢 Каналы"))
 
-# Сохраняем подписчика
-def save_user(user_id):
-    users = load_users()
-    if user_id not in users:
-        users.append(user_id)
+inline_keyboard = types.InlineKeyboardMarkup(row_width=1)
+inline_keyboard.add(
+    types.InlineKeyboardButton("Спорт", url="https://t.me/sportsoda"),
+    types.InlineKeyboardButton("Новости Профкома", url="https://t.me/profkomsoda"),
+    types.InlineKeyboardButton("Фабрика идей", url="https://t.me/your_invest_channel"),
+)
+
+# --- Команда /start ---
+@dp.message_handler(commands=['start'])
+async def start_handler(message: types.Message):
+    if message.from_user.id not in users:
+        users.append(message.from_user.id)
         with open(USERS_FILE, "w") as f:
             json.dump(users, f)
+    await message.answer("👋 Добро пожаловать! Используйте кнопки в меню ниже.", reply_markup=reply_keyboard)
 
-# Обработчик команды /start
-@dp.message_handler(CommandStart())
-async def handle_start(message: types.Message):
-    save_user(message.from_user.id)
-    await message.answer("✅ Вы подписаны на рассылку новостей из наших каналов.")
+# --- Обработка нажатия на кнопку "Каналы" ---
+@dp.message_handler(lambda message: message.text == "📢 Каналы")
+async def channels_handler(message: types.Message):
+    await message.answer("Выберите канал из списка:", reply_markup=inline_keyboard)
 
-# Хендлер постов из каналов
-@dp.channel_post_handler()
-async def handle_channel_post(message: types.Message):
-    print("📩 Новое сообщение из канала:", message.chat.title)
-    users = load_users()
+# --- Хендлер пересылки новых постов из каналов ---
+@dp.channel_post_handler(content_types=types.ContentType.ANY)
+async def channel_post_handler(message: types.Message):
+    channel_title = message.chat.title
+    caption = f"📢 От канала: {channel_title}\n\n{message.caption or ''}"
 
     for user_id in users:
         try:
-            await bot.copy_message(
-                chat_id=user_id,
-                from_chat_id=message.chat.id,
-                message_id=message.message_id
-            )
-        except (BotBlocked, ChatNotFound):
-            print(f"⚠️ Пользователь {user_id} недоступен, удаляю из списка.")
-            users.remove(user_id)
+            if message.content_type == types.ContentType.TEXT:
+                await bot.send_message(user_id, caption)
+
+            elif message.content_type == types.ContentType.PHOTO:
+                file_id = message.photo[-1].file_id
+                await send_downloaded_file(user_id, file_id, "jpg", caption)
+
+            elif message.content_type == types.ContentType.VIDEO:
+                file_id = message.video.file_id
+                await send_downloaded_file(user_id, file_id, "mp4", caption, is_video=True)
+
+            # Можно добавить и другие типы сообщений (documents, audios и т.д.)
+
         except Exception as e:
             print(f"Ошибка при отправке пользователю {user_id}: {e}")
 
-    # Обновляем файл пользователей, исключив недоступных
-    with open(USERS_FILE, "w") as f:
-        json.dump(users, f)
+# --- Функция скачивания и пересылки файла ---
+async def send_downloaded_file(user_id, file_id, extension, caption, is_video=False):
+    file = await bot.get_file(file_id)
+    file_path = file.file_path
+    url = f"https://api.telegram.org/file/bot{API_TOKEN}/{file_path}"
 
-# Запуск бота
-if __name__ == "__main__":
+    temp_file = f"temp.{extension}"
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            if resp.status == 200:
+                with open(temp_file, "wb") as f:
+                    f.write(await resp.read())
+
+    with open(temp_file, "rb") as f:
+        if is_video:
+            await bot.send_video(user_id, f, caption=caption)
+        else:
+            await bot.send_photo(user_id, f, caption=caption)
+
+    os.remove(temp_file)
+
+if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
