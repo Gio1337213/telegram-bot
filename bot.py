@@ -50,12 +50,15 @@ async def channels_handler(message: types.Message):
 # Авторассылка новых постов из каналов
 @dp.channel_post_handler()
 async def handle_channel_post(message: types.Message):
+    print(f"Получено сообщение из канала {message.chat.id}: {message.text or 'фото/видео'}")
     users = load_users()
     for user_id in users:
         try:
             await bot.copy_message(chat_id=user_id, from_chat_id=message.chat.id, message_id=message.message_id)
+            print(f"Отправлено пользователю {user_id}")
         except Exception as e:
-            print(f"Не удалось отправить сообщение {user_id}: {e}")
+            print(f"❌ Ошибка для пользователя {user_id}: {e}")
+            continue
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
