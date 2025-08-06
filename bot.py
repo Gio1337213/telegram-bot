@@ -1,48 +1,56 @@
-import json
 import os
+import json
 from aiogram import Bot, Dispatcher, executor, types
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.dispatcher.filters import CommandStart
 
-API_TOKEN = os.getenv("API_TOKEN")  # или замени напрямую: 'your_token_here'
-bot = Bot(token=API_TOKEN, parse_mode='HTML')
+API_TOKEN = os.getenv("API_TOKEN")  # Обязательно добавь в Render или .env
+USERS_FILE = "users.json"
+WELCOME_IMAGE = "welcome.jpg"
+
+bot = Bot(token=API_TOKEN, parse_mode="HTML")
 dp = Dispatcher(bot)
 
-USERS_FILE = "users.json"
+# Реплай-кнопка
+reply_kb = ReplyKeyboardMarkup(resize_keyboard=True)
+reply_kb.add(KeyboardButton("📢 Каналы"))
 
-# Загрузка пользователей
-def load_users():
-    if os.path.exists(USERS_FILE):
-        with open(USERS_FILE, 'r') as f:
-            return json.load(f)
-    return []
+# Инлайн-кнопки
+inline_kb = InlineKeyboardMarkup(row_width=1).add(
+    InlineKeyboardButton("⚽ Спорт", url="https://t.me/sportsoda"),
+    InlineKeyboardButton("📣 Профком", url="https://t.me/profkomsoda"),
+    InlineKeyboardButton("⚠️ ОТиПБ", url="https://t.me/your_invest_channel"),
+    InlineKeyboardButton("💡 Фабрика идей", url="https://t.me/your_invest_channel"),
+    InlineKeyboardButton("❓ Что такое БСА", url="https://t.me/your_invest_channel")
+)
 
-# Сохранение пользователей
-def save_user(user_id):
-    users = load_users()
-    if user_id not in users:
-        users.append(user_id)
-        with open(USERS_FILE, 'w') as f:
+# Создание users.json при необходимости
+if not os.path.exists(USERS_FILE):
+    with open(USERS_FILE, "w") as f:
+        json.dump([], f)
+
+# /start — добавление юзера + приветствие с картинкой
+@dp.message_handler(CommandStart())
+async def send_welcome(message: types.Message):
+    with open(USERS_FILE, "r") as f:
+        users = json.load(f)
+
+    if message.from_user.id not in users:
+        users.append(message.from_user.id)
+        with open(USERS_FILE, "w") as f:
             json.dump(users, f)
 
-# Обработка команды /start
-@dp.message_handler(commands=["start"])
-async def start_handler(message: types.Message):
-    save_user(message.from_user.id)
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add("Каналы")
-    await message.answer("👋 Добро пожаловать!\nНажмите <b>Каналы</b>, чтобы перейти к списку.", reply_markup=keyboard)
+    caption = "👋 Добро пожаловать!\n\nНажмите кнопку ниже, чтобы открыть меню:"
+    try:
+        with open(WELCOME_IMAGE, "rb") as photo:
+            await message.answer_photo(photo, caption=caption, reply_markup=reply_kb)
+    except FileNotFoundError:
+        await message.answer(caption, reply_markup=reply_kb)
 
-# Обработка кнопки "Каналы"
+# Кнопка "📢 Каналы"
 @dp.message_handler(lambda msg: msg.text == "📢 Каналы")
-async def show_channels(message: types.Message):
-    inline = types.InlineKeyboardMarkup(row_width=1)
-    inline.add(
-        types.InlineKeyboardButton("🏋 Спорт", url="https://t.me/sportsoda"),
-        types.InlineKeyboardButton("📰 Профком", url="https://t.me/profkomsoda"),
-        types.InlineKeyboardButton("📚 ОТиПБ", url="https://t.me/your_invest_channel"),
-        types.InlineKeyboardButton("💡 Фабрика идей", url="https://t.me/your_invest_channel"),
-        types.InlineKeyboardButton("🧠 Что такое БСА", url="https://t.me/your_invest_channel"),
-    )
-    await message.answer("Выберите канал:", reply_markup=inline)
+async def show_channels(msg: types.Message):
+    await msg.answer("Выберите интересующий канал:", reply_markup=inline_kb)
 
 # Пересылка постов из каналов
 @dp.channel_post_handler()
