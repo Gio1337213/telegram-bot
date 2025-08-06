@@ -102,8 +102,9 @@ async def forward_post(message: types.Message):
 
 # Webhook
 async def on_startup(app):
-    print(f"📡 Устанавливаю Webhook на: {WEBHOOK_URL}")
+    print(f"[LOG] 📡 Устанавливаю Webhook на: {WEBHOOK_URL}")
     await bot.set_webhook(WEBHOOK_URL)
+    print("[LOG] ✅ Webhook установлен")
 
 async def on_shutdown(app):
     await bot.delete_webhook()
