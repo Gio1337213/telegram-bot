@@ -39,6 +39,7 @@ def save_user(user_id):
         users.append(user_id)
         with open(USERS_FILE, "w") as f:
             json.dump(users, f)
+        print(f"[LOG] Добавлен пользователь {user_id}")
 
 # /start
 @dp.message_handler(CommandStart())
