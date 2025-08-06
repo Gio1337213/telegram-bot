@@ -72,31 +72,37 @@ async def forward_post(message: types.Message):
         from_info = f"<b>📢 Канал:</b> <i>{channel.title}</i>\n\n"
     except Exception as e:
         from_info = ""
-        print(f"❌ Ошибка получения инфо о канале: {e}")
+        print(f"❌ Ошибка получения информации о канале: {e}")
 
-    content_text = message.caption or message.text or ""
-    caption = from_info + content_text
-
+    caption = from_info + (message.caption or message.text or "")
     if len(caption) > 1024:
         caption = caption[:1020] + "..."
 
     for user_id in users:
         try:
-            if message.photo:
-                await bot.send_photo(user_id, photo=message.photo[-1].file_id, caption=caption)
-            elif message.video:
-                await bot.send_video(user_id, video=message.video.file_id, caption=caption)
-            elif message.document:
-                await bot.send_document(user_id, document=message.document.file_id, caption=caption)
-            elif message.animation:
-                await bot.send_animation(user_id, animation=message.animation.file_id, caption=caption)
-            elif message.text:
-                await bot.send_message(user_id, text=caption)
+            if message.content_type == "photo":
+                await bot.send_photo(user_id, message.photo[-1].file_id, caption=caption)
+            elif message.content_type == "video":
+                await bot.send_video(user_id, message.video.file_id, caption=caption)
+            elif message.content_type == "document":
+                await bot.send_document(user_id, message.document.file_id, caption=caption)
+            elif message.content_type == "animation":
+                await bot.send_animation(user_id, message.animation.file_id, caption=caption)
+            elif message.content_type == "sticker":
+                await bot.send_sticker(user_id, message.sticker.file_id)
+            elif message.content_type == "voice":
+                await bot.send_voice(user_id, message.voice.file_id, caption=caption)
+            elif message.content_type == "audio":
+                await bot.send_audio(user_id, message.audio.file_id, caption=caption)
+            elif message.content_type == "video_note":
+                await bot.send_video_note(user_id, message.video_note.file_id)
+            elif message.content_type == "text":
+                await bot.send_message(user_id, caption)
             else:
-                await bot.send_message(user_id, text=from_info + "📌 Новый пост.")
-            print(f"✅ Отправлено {user_id}")
+                await bot.send_message(user_id, from_info + "📌 Новый пост в канале.")
+            print(f"✅ Отправлено пользователю {user_id}")
         except Exception as e:
-            print(f"❌ Ошибка у {user_id}: {e}")
+            print(f"❌ Ошибка при отправке пользователю {user_id}: {e}")
 
 # Webhook
 async def on_startup(app):
