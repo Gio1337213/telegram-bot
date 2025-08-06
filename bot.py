@@ -32,15 +32,15 @@ async def start_handler(message: types.Message):
     await message.answer("👋 Добро пожаловать!\nНажмите <b>Каналы</b>, чтобы перейти к списку.", reply_markup=keyboard)
 
 # Обработка кнопки "Каналы"
-@dp.message_handler(lambda msg: msg.text == "Каналы")
+@dp.message_handler(lambda msg: msg.text == "📢 Каналы")
 async def show_channels(message: types.Message):
     inline = types.InlineKeyboardMarkup(row_width=1)
     inline.add(
-        types.InlineKeyboardButton("Спорт", url="https://t.me/sportsoda"),
-        types.InlineKeyboardButton("Профком", url="https://t.me/profkomsoda"),
-        types.InlineKeyboardButton("ОТиПБ", url="https://t.me/your_invest_channel"),
-        types.InlineKeyboardButton("Фабрика идей", url="https://t.me/your_invest_channel"),
-        types.InlineKeyboardButton("Что такое БСА", url="https://t.me/your_invest_channel"),
+        types.InlineKeyboardButton("🏋 Спорт", url="https://t.me/sportsoda"),
+        types.InlineKeyboardButton("📰 Профком", url="https://t.me/profkomsoda"),
+        types.InlineKeyboardButton("📚 ОТиПБ", url="https://t.me/your_invest_channel"),
+        types.InlineKeyboardButton("💡 Фабрика идей", url="https://t.me/your_invest_channel"),
+        types.InlineKeyboardButton("🧠 Что такое БСА", url="https://t.me/your_invest_channel"),
     )
     await message.answer("Выберите канал:", reply_markup=inline)
 
