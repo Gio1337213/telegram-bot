@@ -7,7 +7,7 @@ from aiogram.dispatcher.filters import CommandStart
 from aiohttp import web
 
 API_TOKEN = os.getenv("API_TOKEN")
-WEBHOOK_HOST = os.getenv("WEBHOOK_HOST")  # пример: https://your-app.onrender.com
+WEBHOOK_HOST = os.getenv("https://telegram-bot-fa47.onrender.com")  # пример: https://your-app.onrender.com
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 WEBAPP_HOST = "0.0.0.0"
