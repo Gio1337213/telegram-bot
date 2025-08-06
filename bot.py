@@ -7,7 +7,7 @@ from aiogram.dispatcher.filters import CommandStart
 from aiohttp import web
 
 API_TOKEN = os.getenv("API_TOKEN")
-WEBHOOK_HOST = "https://telegram-bot-fa47.onrender.com"  # Хост без переменных окружения
+WEBHOOK_HOST = "https://telegram-bot-fa47.onrender.com"
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 WEBAPP_PORT = int(os.getenv("PORT", default=10000))
@@ -51,15 +51,21 @@ async def start(message: types.Message):
     except FileNotFoundError:
         await message.answer(caption, reply_markup=reply_kb)
 
-# Кнопка "📢 Каналы"
+# Каналы
 @dp.message_handler(lambda msg: msg.text == "📢 Каналы")
 async def show_channels(message: types.Message):
     await message.answer("Выберите интересующий канал:", reply_markup=inline_kb)
 
-# Обработка новых постов в канале
+# Рассылка
 @dp.channel_post_handler()
 async def forward_post(message: types.Message):
+    print(f"[LOG] Получен пост из канала: {message.chat.title}")
+
     users = load_users()
+    if not users:
+        print("[LOG] Нет пользователей для рассылки.")
+        return
+
     try:
         channel = await bot.get_chat(message.chat.id)
         from_info = f"<b>📢 Канал:</b> <i>{channel.title}</i>\n\n"
@@ -69,6 +75,7 @@ async def forward_post(message: types.Message):
 
     content_text = message.caption or message.text or ""
     caption = from_info + content_text
+
     if len(caption) > 1024:
         caption = caption[:1020] + "..."
 
@@ -86,6 +93,7 @@ async def forward_post(message: types.Message):
                 await bot.send_message(user_id, text=caption)
             else:
                 await bot.send_message(user_id, text=from_info + "📌 Новый пост в канале.")
+            print(f"✅ Отправлено пользователю {user_id}")
         except Exception as e:
             print(f"❌ Ошибка при отправке пользователю {user_id}: {e}")
 
@@ -98,7 +106,6 @@ async def on_shutdown(app):
     await bot.delete_webhook()
     await bot.session.close()
 
-# Запуск
 app = get_new_configured_app(dispatcher=dp, path=WEBHOOK_PATH)
 app.on_startup.append(on_startup)
 app.on_shutdown.append(on_shutdown)
