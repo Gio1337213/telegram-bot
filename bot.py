@@ -7,7 +7,7 @@ from aiogram.dispatcher.filters import CommandStart
 API_TOKEN = os.getenv("API_TOKEN")
 USERS_FILE = "users.json"
 
-bot = Bot(token=API_TOKEN, parse_mode="HTML")  # parse_mode установлен глобально
+bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
 # Реплай-клавиатура
@@ -47,15 +47,23 @@ async def send_welcome(message: types.Message):
 async def show_channels(message: types.Message):
     await message.answer("Выберите канал:", reply_markup=inline_kb)
 
-# РАССЫЛКА из канала
+# Рассылка из канала
 @dp.channel_post_handler()
 async def forward_channel_post(message: types.Message):
     with open(USERS_FILE, "r") as f:
         users = json.load(f)
 
-    # Добавляем подпись с названием канала
+    # Заголовок канала
     channel_title = message.chat.title
     prefix = f"📣 <b>Пост из канала:</b> <i>{channel_title}</i>\n\n"
+
+    # caption может быть None — защищаемся
+    original_caption = message.caption or message.text or ""
+    caption = (prefix + original_caption).strip()
+
+    # Обрезаем до 1024 символов
+    if len(caption) > 1024:
+        caption = caption[:1020] + "..."
 
     for user_id in users:
         try:
@@ -63,24 +71,28 @@ async def forward_channel_post(message: types.Message):
                 await bot.send_photo(
                     chat_id=user_id,
                     photo=message.photo[-1].file_id,
-                    caption=prefix + (message.caption or "")
+                    caption=caption,
+                    parse_mode="HTML"
                 )
             elif message.content_type == "video":
                 await bot.send_video(
                     chat_id=user_id,
                     video=message.video.file_id,
-                    caption=prefix + (message.caption or "")
+                    caption=caption,
+                    parse_mode="HTML"
                 )
             elif message.content_type == "document":
                 await bot.send_document(
                     chat_id=user_id,
                     document=message.document.file_id,
-                    caption=prefix + (message.caption or "")
+                    caption=caption,
+                    parse_mode="HTML"
                 )
             elif message.content_type == "text":
                 await bot.send_message(
                     chat_id=user_id,
-                    text=prefix + message.text
+                    text=caption,
+                    parse_mode="HTML"
                 )
         except Exception as e:
             print(f"❌ Ошибка отправки пользователю {user_id}: {e}")
