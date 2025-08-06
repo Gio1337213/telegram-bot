@@ -103,4 +103,4 @@ app.on_startup.append(on_startup)
 app.on_shutdown.append(on_shutdown)
 
 if __name__ == "__main__":
-    web.run_app(app, host=WEBAPP_HOST, port=WEBAPP_PORT)
+    web.run_app(app, host="0.0.0.0", port=WEBAPP_PORT)
