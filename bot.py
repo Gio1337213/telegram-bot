@@ -7,7 +7,7 @@ from aiogram.dispatcher.filters import CommandStart
 from aiohttp import web
 
 API_TOKEN = os.getenv("API_TOKEN")
-WEBHOOK_HOST = os.getenv("WEBHOOK_HOST", "https://telegram-bot-fa47.onrender.com")
+WEBHOOK_HOST = "https://telegram-bot-fa47.onrender.com"  # ЗАХАРДКОДИЛИ
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 WEBAPP_HOST = "0.0.0.0"
@@ -97,6 +97,7 @@ async def on_startup(app):
 
 async def on_shutdown(app):
     await bot.delete_webhook()
+    await bot.session.close()  # Закрываем сессию явно
 
 app = get_new_configured_app(dispatcher=dp, path=WEBHOOK_PATH)
 app.on_startup.append(on_startup)
