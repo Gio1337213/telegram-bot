@@ -62,11 +62,11 @@ async def show_channels(message: types.Message):
 async def handle_channel_post(msg: types.Message):
     print(f"[LOG] Новый пост: {msg.content_type}")
     if msg.photo:
-        await bot.send_photo(@ONM512, msg.photo[-1].file_id, caption=msg.caption or "Фото без подписи")
+        await bot.send_photo(6050553187, msg.photo[-1].file_id, caption=msg.caption or "Фото без подписи")
     elif msg.text:
-        await bot.send_message(@ONM512, msg.text)
+        await bot.send_message(6050553187, msg.text)
     else:
-        await bot.send_message(@ONM512, "Тип сообщения не поддержан")
+        await bot.send_message(6050553187, "Тип сообщения не поддержан")
 
 # Webhook
 async def on_startup(app):
