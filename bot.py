@@ -1,12 +1,13 @@
 import os
 import json
+import aiohttp
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.dispatcher.webhook import get_new_configured_app
 from aiogram.dispatcher.filters import CommandStart
 from aiohttp import web
 
-API_TOKEN = os.getenv("API_TOKEN")  # Убедись, что переменная задана в Render!
+API_TOKEN = os.getenv("API_TOKEN")
 WEBHOOK_HOST = "https://telegram-bot-fa47.onrender.com"
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
@@ -26,7 +27,7 @@ inline_kb = InlineKeyboardMarkup(row_width=1).add(
     InlineKeyboardButton("🧠 Что такое БСА", url="https://t.me/your_invest_channel"),
 )
 
-# Загрузка пользователей
+# Пользователи
 def load_users():
     if os.path.exists(USERS_FILE):
         with open(USERS_FILE, "r") as f:
@@ -39,7 +40,7 @@ def save_user(user_id):
         users.append(user_id)
         with open(USERS_FILE, "w") as f:
             json.dump(users, f)
-        print(f"[LOG] Добавлен пользователь: {user_id}")
+        print(f"[LOG] Добавлен пользователь {user_id}")
 
 # /start
 @dp.message_handler(CommandStart())
@@ -52,26 +53,68 @@ async def start(message: types.Message):
     except FileNotFoundError:
         await message.answer(caption, reply_markup=reply_kb)
 
-# Каналы
+# Кнопка "Каналы"
 @dp.message_handler(lambda msg: msg.text == "📢 Каналы")
 async def show_channels(message: types.Message):
     await message.answer("Выберите интересующий канал:", reply_markup=inline_kb)
 
-# Пересылка из канала
+# Функция загрузки и пересылки медиа
+async def download_and_send_media(media, method, user_id, caption):
+    file = await bot.get_file(media.file_id)
+    file_path = file.file_path
+    file_url = f"https://api.telegram.org/file/bot{API_TOKEN}/{file_path}"
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(file_url) as resp:
+            if resp.status == 200:
+                media_bytes = await resp.read()
+                media_file = types.InputFile(io.BytesIO(media_bytes), filename=os.path.basename(file_path))
+                try:
+                    await method(user_id, media=media_file, caption=caption)
+                except Exception as e:
+                    print(f"❌ Ошибка при отправке медиа пользователю {user_id}: {e}")
+
+# Рассылка
 @dp.channel_post_handler()
-async def handle_channel_post(msg: types.Message):
-    print(f"[LOG] Новый пост: {msg.content_type}")
-    if msg.photo:
-        await bot.send_photo(6050553187, msg.photo[-1].file_id, caption=msg.caption or "Фото без подписи")
-    elif msg.text:
-        await bot.send_message(6050553187, msg.text)
-    else:
-        await bot.send_message(6050553187, "Тип сообщения не поддержан")
+async def forward_post(message: types.Message):
+    print(f"[LOG] Получен пост из канала: {message.chat.title}")
+    users = load_users()
+    if not users:
+        print("[LOG] Нет пользователей для рассылки.")
+        return
+
+    try:
+        channel = await bot.get_chat(message.chat.id)
+        from_info = f"<b>📢 Канал:</b> <i>{channel.title}</i>\n\n"
+    except Exception as e:
+        from_info = ""
+        print(f"❌ Ошибка получения информации о канале: {e}")
+
+    caption = from_info + (message.caption or message.text or "")
+
+    for user_id in users:
+        try:
+            if message.photo:
+                await bot.send_photo(user_id, photo=message.photo[-1].file_id, caption=caption)
+            elif message.video:
+                await bot.send_video(user_id, video=message.video.file_id, caption=caption)
+            elif message.document:
+                await bot.send_document(user_id, document=message.document.file_id, caption=caption)
+            elif message.animation:
+                await bot.send_animation(user_id, animation=message.animation.file_id, caption=caption)
+            elif message.text:
+                await bot.send_message(user_id, text=caption)
+            else:
+                await bot.send_message(user_id, text=from_info + "📌 Новый пост в канале.")
+            print(f"✅ Отправлено пользователю {user_id}")
+        except Exception as e:
+            print(f"❌ Ошибка при отправке пользователю {user_id}: {e}")
 
 # Webhook
 async def on_startup(app):
     print(f"[LOG] 📡 Устанавливаю Webhook на: {WEBHOOK_URL}")
     await bot.set_webhook(WEBHOOK_URL)
+    print("[LOG] ✅ Webhook установлен")
 
 async def on_shutdown(app):
     await bot.delete_webhook()
