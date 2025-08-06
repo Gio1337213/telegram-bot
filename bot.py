@@ -11,7 +11,7 @@ WEBHOOK_HOST = os.getenv("WEBHOOK_HOST", "https://telegram-bot-fa47.onrender.com
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 WEBAPP_HOST = "0.0.0.0"
-WEBAPP_PORT = int(os.getenv("PORT", default=3000))
+WEBAPP_PORT = int(os.getenv("PORT", default=10000))
 USERS_FILE = "users.json"
 
 bot = Bot(token=API_TOKEN, parse_mode="HTML")
