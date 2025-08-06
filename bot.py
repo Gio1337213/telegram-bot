@@ -59,51 +59,14 @@ async def show_channels(message: types.Message):
 
 # Пересылка из канала
 @dp.channel_post_handler()
-async def forward_post(message: types.Message):
-    print(f"[LOG] Получен пост из канала: {message.chat.title}")
-    users = load_users()
-
-    if not users:
-        print("[LOG] Нет пользователей для рассылки.")
-        return
-
-    try:
-        channel = await bot.get_chat(message.chat.id)
-        from_info = f"<b>📢 Канал:</b> <i>{channel.title}</i>\n\n"
-    except Exception as e:
-        from_info = ""
-        print(f"❌ Ошибка получения информации о канале: {e}")
-
-    caption = from_info + (message.caption or message.text or "")
-    if len(caption) > 1024:
-        caption = caption[:1020] + "..."
-
-    for user_id in users:
-        try:
-            ct = message.content_type
-            if ct == "photo":
-                await bot.send_photo(user_id, message.photo[-1].file_id, caption=caption)
-            elif ct == "video":
-                await bot.send_video(user_id, message.video.file_id, caption=caption)
-            elif ct == "animation":
-                await bot.send_animation(user_id, message.animation.file_id, caption=caption)
-            elif ct == "document":
-                await bot.send_document(user_id, message.document.file_id, caption=caption)
-            elif ct == "audio":
-                await bot.send_audio(user_id, message.audio.file_id, caption=caption)
-            elif ct == "voice":
-                await bot.send_voice(user_id, message.voice.file_id, caption=caption)
-            elif ct == "video_note":
-                await bot.send_video_note(user_id, message.video_note.file_id)
-            elif ct == "sticker":
-                await bot.send_sticker(user_id, message.sticker.file_id)
-            elif ct == "text":
-                await bot.send_message(user_id, caption)
-            else:
-                await bot.send_message(user_id, f"{from_info}📌 Новый пост в канале.")
-            print(f"✅ Отправлено пользователю {user_id}")
-        except Exception as e:
-            print(f"❌ Ошибка при отправке пользователю {user_id}: {e}")
+async def handle_channel_post(msg: types.Message):
+    print(f"[LOG] Новый пост: {msg.content_type}")
+    if msg.photo:
+        await bot.send_photo(ADMIN_USER_ID, msg.photo[-1].file_id, caption=msg.caption or "Фото без подписи")
+    elif msg.text:
+        await bot.send_message(ADMIN_USER_ID, msg.text)
+    else:
+        await bot.send_message(ADMIN_USER_ID, "Тип сообщения не поддержан")
 
 # Webhook
 async def on_startup(app):
