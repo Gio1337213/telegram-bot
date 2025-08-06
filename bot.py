@@ -60,7 +60,9 @@ async def show_channels(message: types.Message):
 @dp.channel_post_handler()
 async def forward_post(message: types.Message):
     print(f"[LOG] Получен пост из канала: {message.chat.title}")
-
+    with open("log.txt", "a") as log:
+        log.write(f"\nNew post from: {message.chat.title} — {message.text or message.caption}")
+    ...
     users = load_users()
     if not users:
         print("[LOG] Нет пользователей для рассылки.")
