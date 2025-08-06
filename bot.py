@@ -52,40 +52,41 @@ async def show_channels(message: types.Message):
 # РАССЫЛКА из канала — бот должен быть админом!
 @dp.channel_post_handler()
 async def forward_channel_post(message: types.Message):
-    users = load_users()
-    channel_name = message.chat.title or "Канал"
-    caption = f"📢 <b>{channel_name}</b>\n\n{message.caption or message.text or ''}"
+    with open(USERS_FILE, "r") as f:
+        users = json.load(f)
+
+    # Название канала (откуда пришёл пост)
+    channel_title = message.chat.title
+    prefix = f"📣 <b>Пост из канала:</b> <i>{channel_title}</i>\n\n"
 
     for user_id in users:
         try:
-            if message.photo:
-                file = await bot.get_file(message.photo[-1].file_id)
-                photo_path = f"photo_{message.message_id}.jpg"
-                await message.photo[-1].download(destination_file=photo_path)
-                with open(photo_path, "rb") as photo_file:
-                    await bot.send_photo(user_id, photo=photo_file, caption=caption, parse_mode="HTML")
-                os.remove(photo_path)
-
-            elif message.video:
-                file = await bot.get_file(message.video.file_id)
-                video_path = f"video_{message.message_id}.mp4"
-                await message.video.download(destination_file=video_path)
-                with open(video_path, "rb") as video_file:
-                    await bot.send_video(user_id, video=video_file, caption=caption, parse_mode="HTML")
-                os.remove(video_path)
-
-            elif message.document:
-                file = await bot.get_file(message.document.file_id)
-                doc_path = f"doc_{message.message_id}.pdf"
-                await message.document.download(destination_file=doc_path)
-                with open(doc_path, "rb") as doc_file:
-                    await bot.send_document(user_id, document=doc_file, caption=caption, parse_mode="HTML")
-                os.remove(doc_path)
-
-            elif message.text:
-                await bot.send_message(user_id, text=caption, parse_mode="HTML")
-
-            await asyncio.sleep(1.5)  # антифлуд
-
+            if message.content_type == "photo":
+                await bot.send_photo(
+                    chat_id=user_id,
+                    photo=message.photo[-1].file_id,
+                    caption=prefix + (message.caption or ""),
+                    parse_mode="HTML"
+                )
+            elif message.content_type == "video":
+                await bot.send_video(
+                    chat_id=user_id,
+                    video=message.video.file_id,
+                    caption=prefix + (message.caption or ""),
+                    parse_mode="HTML"
+                )
+            elif message.content_type == "document":
+                await bot.send_document(
+                    chat_id=user_id,
+                    document=message.document.file_id,
+                    caption=prefix + (message.caption or ""),
+                    parse_mode="HTML"
+                )
+            elif message.content_type == "text":
+                await bot.send_message(
+                    chat_id=user_id,
+                    text=prefix + message.text,
+                    parse_mode="HTML"
+                )
         except Exception as e:
-            logging.error(f"Ошибка рассылки для {user_id}: {e}")
+            print(f"❌ Ошибка отправки пользователю {user_id}: {e}")
