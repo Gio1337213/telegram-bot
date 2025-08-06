@@ -1,78 +1,77 @@
-import os
 import json
+import os
 from aiogram import Bot, Dispatcher, executor, types
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.dispatcher.filters import CommandStart
 
-API_TOKEN = os.getenv("API_TOKEN")
-USERS_FILE = "users.json"
-
-bot = Bot(token=API_TOKEN, parse_mode="HTML")  # глобально ставим HTML
+API_TOKEN = os.getenv("API_TOKEN")  # или замени напрямую: 'your_token_here'
+bot = Bot(token=API_TOKEN, parse_mode='HTML')
 dp = Dispatcher(bot)
 
-# Реплай-кнопка
-reply_kb = ReplyKeyboardMarkup(resize_keyboard=True)
-reply_kb.add(KeyboardButton("📢 Каналы"))
+USERS_FILE = "users.json"
 
-# Инлайн-кнопки
-inline_kb = InlineKeyboardMarkup(row_width=1).add(
-    InlineKeyboardButton("Спорт", url="https://t.me/sportsoda"),
-    InlineKeyboardButton("Новости Профкома", url="https://t.me/profkomsoda"),
-    InlineKeyboardButton("ОТиПБ", url="https://t.me/your_invest_channel"),
-    InlineKeyboardButton("Фабрика идей", url="https://t.me/your_invest_channel"),
-    InlineKeyboardButton("Что такое БСА", url="https://t.me/your_invest_channel")
-)
+# Загрузка пользователей
+def load_users():
+    if os.path.exists(USERS_FILE):
+        with open(USERS_FILE, 'r') as f:
+            return json.load(f)
+    return []
 
-# Создание файла users.json при необходимости
-if not os.path.exists(USERS_FILE):
-    with open(USERS_FILE, "w") as f:
-        json.dump([], f)
-
-# /start — добавление юзера
-@dp.message_handler(CommandStart())
-async def send_welcome(message: types.Message):
-    with open(USERS_FILE, "r") as f:
-        users = json.load(f)
-
-    if message.from_user.id not in users:
-        users.append(message.from_user.id)
-        with open(USERS_FILE, "w") as f:
+# Сохранение пользователей
+def save_user(user_id):
+    users = load_users()
+    if user_id not in users:
+        users.append(user_id)
+        with open(USERS_FILE, 'w') as f:
             json.dump(users, f)
 
-    await message.answer("👋 Добро пожаловать!\n\nНажмите кнопку ниже:", reply_markup=reply_kb)
+# Обработка команды /start
+@dp.message_handler(commands=["start"])
+async def start_handler(message: types.Message):
+    save_user(message.from_user.id)
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.add("Каналы")
+    await message.answer("👋 Добро пожаловать!\nНажмите <b>Каналы</b>, чтобы перейти к списку.", reply_markup=keyboard)
 
-# Кнопка "Каналы"
-@dp.message_handler(lambda msg: msg.text == "📢 Каналы")
-async def show_channels(msg: types.Message):
-    await msg.answer("Выберите канал:", reply_markup=inline_kb)
+# Обработка кнопки "Каналы"
+@dp.message_handler(lambda msg: msg.text == "Каналы")
+async def show_channels(message: types.Message):
+    inline = types.InlineKeyboardMarkup(row_width=1)
+    inline.add(
+        types.InlineKeyboardButton("Спорт", url="https://t.me/sportsoda"),
+        types.InlineKeyboardButton("Профком", url="https://t.me/profkomsoda"),
+        types.InlineKeyboardButton("ОТиПБ", url="https://t.me/your_invest_channel"),
+        types.InlineKeyboardButton("Фабрика идей", url="https://t.me/your_invest_channel"),
+        types.InlineKeyboardButton("Что такое БСА", url="https://t.me/your_invest_channel"),
+    )
+    await message.answer("Выберите канал:", reply_markup=inline)
 
-# Обработка сообщений из канала (бот должен быть админом)
+# Пересылка постов из каналов
 @dp.channel_post_handler()
-async def forward_channel_post(message: types.Message):
-    with open(USERS_FILE, "r") as f:
-        users = json.load(f)
+async def forward_to_users(post: types.Message):
+    users = load_users()
 
-    # Подпись с названием канала
-    channel_title = message.chat.title
-    base_caption = f"📣 <b>Пост из канала:</b> <i>{channel_title}</i>\n\n"
-
-    # Определение финального текста
-    content_text = message.caption or message.text or ""
-    full_caption = base_caption + content_text
-
-    # Срезаем если длинный caption
-    if len(full_caption) > 1024:
-        full_caption = full_caption[:1020] + "..."
+    # Подпись для заголовка (если доступен channel username/title)
+    try:
+        channel = await bot.get_chat(post.chat.id)
+        from_info = f"<b>📢 Канал:</b> {channel.title}\n\n"
+    except:
+        from_info = ""
 
     for user_id in users:
         try:
-            if message.content_type == "photo":
-                await bot.send_photo(user_id, message.photo[-1].file_id, caption=full_caption)
-            elif message.content_type == "video":
-                await bot.send_video(user_id, message.video.file_id, caption=full_caption)
-            elif message.content_type == "document":
-                await bot.send_document(user_id, message.document.file_id, caption=full_caption)
-            elif message.content_type == "text":
-                await bot.send_message(user_id, full_caption)
+            if post.text:
+                await bot.send_message(user_id, from_info + post.text)
+            elif post.photo:
+                await bot.send_photo(user_id, post.photo[-1].file_id, caption=from_info + (post.caption or ""))
+            elif post.video:
+                await bot.send_video(user_id, post.video.file_id, caption=from_info + (post.caption or ""))
+            elif post.document:
+                await bot.send_document(user_id, post.document.file_id, caption=from_info + (post.caption or ""))
+            elif post.animation:
+                await bot.send_animation(user_id, post.animation.file_id, caption=from_info + (post.caption or ""))
+            else:
+                await bot.send_message(user_id, f"{from_info}📌 Новый пост в канале.")
         except Exception as e:
-            print(f"❌ Ошибка отправки пользователю {user_id}: {e}")
+            print(f"❌ Ошибка при отправке пользователю {user_id}: {e}")
+
+if __name__ == "__main__":
+    executor.start_polling(dp, skip_updates=True)
