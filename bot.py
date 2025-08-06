@@ -6,7 +6,7 @@ from aiogram.dispatcher.webhook import get_new_configured_app
 from aiogram.dispatcher.filters import CommandStart
 from aiohttp import web
 
-API_TOKEN = os.getenv("API_TOKEN")
+API_TOKEN = os.getenv("API_TOKEN")  # Убедись, что переменная задана в Render!
 WEBHOOK_HOST = "https://telegram-bot-fa47.onrender.com"
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
@@ -26,7 +26,7 @@ inline_kb = InlineKeyboardMarkup(row_width=1).add(
     InlineKeyboardButton("🧠 Что такое БСА", url="https://t.me/your_invest_channel"),
 )
 
-# Пользователи
+# Загрузка пользователей
 def load_users():
     if os.path.exists(USERS_FILE):
         with open(USERS_FILE, "r") as f:
@@ -39,7 +39,7 @@ def save_user(user_id):
         users.append(user_id)
         with open(USERS_FILE, "w") as f:
             json.dump(users, f)
-        print(f"[LOG] Добавлен пользователь {user_id}")
+        print(f"[LOG] Добавлен пользователь: {user_id}")
 
 # /start
 @dp.message_handler(CommandStart())
@@ -57,14 +57,12 @@ async def start(message: types.Message):
 async def show_channels(message: types.Message):
     await message.answer("Выберите интересующий канал:", reply_markup=inline_kb)
 
-# Рассылка
+# Пересылка из канала
 @dp.channel_post_handler()
 async def forward_post(message: types.Message):
     print(f"[LOG] Получен пост из канала: {message.chat.title}")
-    with open("log.txt", "a") as log:
-        log.write(f"\nNew post from: {message.chat.title} — {message.text or message.caption}")
-    ...
     users = load_users()
+
     if not users:
         print("[LOG] Нет пользователей для рассылки.")
         return
@@ -74,7 +72,7 @@ async def forward_post(message: types.Message):
         from_info = f"<b>📢 Канал:</b> <i>{channel.title}</i>\n\n"
     except Exception as e:
         from_info = ""
-        print(f"❌ Ошибка получения информации о канале: {e}")
+        print(f"❌ Ошибка получения инфо о канале: {e}")
 
     content_text = message.caption or message.text or ""
     caption = from_info + content_text
@@ -95,16 +93,15 @@ async def forward_post(message: types.Message):
             elif message.text:
                 await bot.send_message(user_id, text=caption)
             else:
-                await bot.send_message(user_id, text=from_info + "📌 Новый пост в канале.")
-            print(f"✅ Отправлено пользователю {user_id}")
+                await bot.send_message(user_id, text=from_info + "📌 Новый пост.")
+            print(f"✅ Отправлено {user_id}")
         except Exception as e:
-            print(f"❌ Ошибка при отправке пользователю {user_id}: {e}")
+            print(f"❌ Ошибка у {user_id}: {e}")
 
 # Webhook
 async def on_startup(app):
     print(f"[LOG] 📡 Устанавливаю Webhook на: {WEBHOOK_URL}")
     await bot.set_webhook(WEBHOOK_URL)
-    print("[LOG] ✅ Webhook установлен")
 
 async def on_shutdown(app):
     await bot.delete_webhook()
