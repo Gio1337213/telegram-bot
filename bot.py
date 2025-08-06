@@ -7,10 +7,10 @@ from aiogram.dispatcher.filters import CommandStart
 API_TOKEN = os.getenv("API_TOKEN")
 USERS_FILE = "users.json"
 
-bot = Bot(token=API_TOKEN)
+bot = Bot(token=API_TOKEN, parse_mode="HTML")  # глобально ставим HTML
 dp = Dispatcher(bot)
 
-# Реплай-клавиатура
+# Реплай-кнопка
 reply_kb = ReplyKeyboardMarkup(resize_keyboard=True)
 reply_kb.add(KeyboardButton("📢 Каналы"))
 
@@ -23,12 +23,12 @@ inline_kb = InlineKeyboardMarkup(row_width=1).add(
     InlineKeyboardButton("Что такое БСА", url="https://t.me/your_invest_channel")
 )
 
-# Убедись, что файл users.json существует
+# Создание файла users.json при необходимости
 if not os.path.exists(USERS_FILE):
     with open(USERS_FILE, "w") as f:
         json.dump([], f)
 
-# Команда /start
+# /start — добавление юзера
 @dp.message_handler(CommandStart())
 async def send_welcome(message: types.Message):
     with open(USERS_FILE, "r") as f:
@@ -39,63 +39,40 @@ async def send_welcome(message: types.Message):
         with open(USERS_FILE, "w") as f:
             json.dump(users, f)
 
-    caption = "👋 Добро пожаловать!\n\nНажмите кнопку ниже, чтобы выбрать канал:"
-    await message.answer(caption, reply_markup=reply_kb)
+    await message.answer("👋 Добро пожаловать!\n\nНажмите кнопку ниже:", reply_markup=reply_kb)
 
-# Обработка кнопки "Каналы"
-@dp.message_handler(lambda message: message.text == "📢 Каналы")
-async def show_channels(message: types.Message):
-    await message.answer("Выберите канал:", reply_markup=inline_kb)
+# Кнопка "Каналы"
+@dp.message_handler(lambda msg: msg.text == "📢 Каналы")
+async def show_channels(msg: types.Message):
+    await msg.answer("Выберите канал:", reply_markup=inline_kb)
 
-# Рассылка из канала
+# Обработка сообщений из канала (бот должен быть админом)
 @dp.channel_post_handler()
 async def forward_channel_post(message: types.Message):
     with open(USERS_FILE, "r") as f:
         users = json.load(f)
 
-    # Заголовок канала
+    # Подпись с названием канала
     channel_title = message.chat.title
-    prefix = f"📣 <b>Пост из канала:</b> <i>{channel_title}</i>\n\n"
+    base_caption = f"📣 <b>Пост из канала:</b> <i>{channel_title}</i>\n\n"
 
-    # caption может быть None — защищаемся
-    original_caption = message.caption or message.text or ""
-    caption = (prefix + original_caption).strip()
+    # Определение финального текста
+    content_text = message.caption or message.text or ""
+    full_caption = base_caption + content_text
 
-    # Обрезаем до 1024 символов
-    if len(caption) > 1024:
-        caption = caption[:1020] + "..."
+    # Срезаем если длинный caption
+    if len(full_caption) > 1024:
+        full_caption = full_caption[:1020] + "..."
 
     for user_id in users:
         try:
             if message.content_type == "photo":
-                await bot.send_photo(
-                    chat_id=user_id,
-                    photo=message.photo[-1].file_id,
-                    caption=caption,
-                    parse_mode="HTML"
-                )
+                await bot.send_photo(user_id, message.photo[-1].file_id, caption=full_caption)
             elif message.content_type == "video":
-                await bot.send_video(
-                    chat_id=user_id,
-                    video=message.video.file_id,
-                    caption=caption,
-                    parse_mode="HTML"
-                )
+                await bot.send_video(user_id, message.video.file_id, caption=full_caption)
             elif message.content_type == "document":
-                await bot.send_document(
-                    chat_id=user_id,
-                    document=message.document.file_id,
-                    caption=caption,
-                    parse_mode="HTML"
-                )
+                await bot.send_document(user_id, message.document.file_id, caption=full_caption)
             elif message.content_type == "text":
-                await bot.send_message(
-                    chat_id=user_id,
-                    text=caption,
-                    parse_mode="HTML"
-                )
+                await bot.send_message(user_id, full_caption)
         except Exception as e:
             print(f"❌ Ошибка отправки пользователю {user_id}: {e}")
-
-if __name__ == '__main__':
-    executor.start_polling(dp, skip_updates=True)
