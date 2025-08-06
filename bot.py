@@ -59,7 +59,7 @@ async def forward_channel_post(message: types.Message):
     channel_title = message.chat.title
     prefix = f"📣 <b>Пост из канала:</b> <i>{channel_title}</i>\n\n"
 
-   for user_id in users:
+    for user_id in users:
         try:
             if message.content_type == "photo":
                 await bot.send_photo(user_id, message.photo[-1].file_id, caption=message.caption or "")
