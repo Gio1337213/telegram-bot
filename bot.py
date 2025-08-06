@@ -62,7 +62,7 @@ async def show_channels(message: types.Message):
 async def download_and_send_media(media, method, user_id, caption):
     file = await bot.get_file(media.file_id)
     file_path = file.file_path
-    file_url = f"https://api.telegram.org/file/bot{API_TOKEN}/{file_path}"
+    file_url = f"https://api.telegram.org/file/bot8242497097:AAHhrMcmh6MfnQ2ym1CaJ5FMwoCYypdtk1c/{file_path}"
 
     async with aiohttp.ClientSession() as session:
         async with session.get(file_url) as resp:
