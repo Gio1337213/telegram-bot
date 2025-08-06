@@ -7,10 +7,9 @@ from aiogram.dispatcher.filters import CommandStart
 from aiohttp import web
 
 API_TOKEN = os.getenv("API_TOKEN")
-WEBHOOK_HOST = "https://telegram-bot-fa47.onrender.com"  # ЗАХАРДКОДИЛИ
+WEBHOOK_HOST = "https://telegram-bot-fa47.onrender.com"  # Хост без переменных окружения
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
-WEBAPP_HOST = "0.0.0.0"
 WEBAPP_PORT = int(os.getenv("PORT", default=10000))
 USERS_FILE = "users.json"
 
@@ -27,7 +26,7 @@ inline_kb = InlineKeyboardMarkup(row_width=1).add(
     InlineKeyboardButton("🧠 Что такое БСА", url="https://t.me/your_invest_channel"),
 )
 
-# JSON-хранилище пользователей
+# Пользователи
 def load_users():
     if os.path.exists(USERS_FILE):
         with open(USERS_FILE, "r") as f:
@@ -52,24 +51,24 @@ async def start(message: types.Message):
     except FileNotFoundError:
         await message.answer(caption, reply_markup=reply_kb)
 
-# При нажатии "📢 Каналы"
+# Кнопка "📢 Каналы"
 @dp.message_handler(lambda msg: msg.text == "📢 Каналы")
 async def show_channels(message: types.Message):
     await message.answer("Выберите интересующий канал:", reply_markup=inline_kb)
 
-# Рассылка из канала
+# Обработка новых постов в канале
 @dp.channel_post_handler()
 async def forward_post(message: types.Message):
     users = load_users()
     try:
         channel = await bot.get_chat(message.chat.id)
         from_info = f"<b>📢 Канал:</b> <i>{channel.title}</i>\n\n"
-    except:
+    except Exception as e:
         from_info = ""
+        print(f"❌ Ошибка получения информации о канале: {e}")
 
     content_text = message.caption or message.text or ""
     caption = from_info + content_text
-
     if len(caption) > 1024:
         caption = caption[:1020] + "..."
 
@@ -88,17 +87,18 @@ async def forward_post(message: types.Message):
             else:
                 await bot.send_message(user_id, text=from_info + "📌 Новый пост в канале.")
         except Exception as e:
-            print(f"❌ Ошибка для {user_id}: {e}")
+            print(f"❌ Ошибка при отправке пользователю {user_id}: {e}")
 
-# Установка вебхука
+# Webhook
 async def on_startup(app):
     print(f"📡 Устанавливаю Webhook на: {WEBHOOK_URL}")
     await bot.set_webhook(WEBHOOK_URL)
 
 async def on_shutdown(app):
     await bot.delete_webhook()
-    await bot.session.close()  # Закрываем сессию явно
+    await bot.session.close()
 
+# Запуск
 app = get_new_configured_app(dispatcher=dp, path=WEBHOOK_PATH)
 app.on_startup.append(on_startup)
 app.on_shutdown.append(on_shutdown)
