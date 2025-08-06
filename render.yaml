@@ -7,3 +7,5 @@ services:
     envVars:
       - key: API_TOKEN
         value: 8242497097:AAHhrMcmh6MfnQ2ym1CaJ5FMwoCYypdtk1c
+      - key: WEBHOOK_HOST
+        value: https://telegram-bot-fa47.onrender.com
