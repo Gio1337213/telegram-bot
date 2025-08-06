@@ -80,26 +80,27 @@ async def forward_post(message: types.Message):
 
     for user_id in users:
         try:
-            if message.content_type == "photo":
+            ct = message.content_type
+            if ct == "photo":
                 await bot.send_photo(user_id, message.photo[-1].file_id, caption=caption)
-            elif message.content_type == "video":
+            elif ct == "video":
                 await bot.send_video(user_id, message.video.file_id, caption=caption)
-            elif message.content_type == "document":
-                await bot.send_document(user_id, message.document.file_id, caption=caption)
-            elif message.content_type == "animation":
+            elif ct == "animation":
                 await bot.send_animation(user_id, message.animation.file_id, caption=caption)
-            elif message.content_type == "sticker":
-                await bot.send_sticker(user_id, message.sticker.file_id)
-            elif message.content_type == "voice":
-                await bot.send_voice(user_id, message.voice.file_id, caption=caption)
-            elif message.content_type == "audio":
+            elif ct == "document":
+                await bot.send_document(user_id, message.document.file_id, caption=caption)
+            elif ct == "audio":
                 await bot.send_audio(user_id, message.audio.file_id, caption=caption)
-            elif message.content_type == "video_note":
+            elif ct == "voice":
+                await bot.send_voice(user_id, message.voice.file_id, caption=caption)
+            elif ct == "video_note":
                 await bot.send_video_note(user_id, message.video_note.file_id)
-            elif message.content_type == "text":
+            elif ct == "sticker":
+                await bot.send_sticker(user_id, message.sticker.file_id)
+            elif ct == "text":
                 await bot.send_message(user_id, caption)
             else:
-                await bot.send_message(user_id, from_info + "📌 Новый пост в канале.")
+                await bot.send_message(user_id, f"{from_info}📌 Новый пост в канале.")
             print(f"✅ Отправлено пользователю {user_id}")
         except Exception as e:
             print(f"❌ Ошибка при отправке пользователю {user_id}: {e}")
