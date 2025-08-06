@@ -7,7 +7,7 @@ from aiogram.dispatcher.filters import CommandStart
 API_TOKEN = os.getenv("API_TOKEN")
 USERS_FILE = "users.json"
 
-bot = Bot(token=API_TOKEN)
+bot = Bot(token=API_TOKEN, parse_mode="HTML")  # parse_mode установлен глобально
 dp = Dispatcher(bot)
 
 # Реплай-клавиатура
@@ -31,7 +31,6 @@ if not os.path.exists(USERS_FILE):
 # Команда /start
 @dp.message_handler(CommandStart())
 async def send_welcome(message: types.Message):
-    # Добавляем пользователя в users.json
     with open(USERS_FILE, "r") as f:
         users = json.load(f)
 
@@ -40,7 +39,6 @@ async def send_welcome(message: types.Message):
         with open(USERS_FILE, "w") as f:
             json.dump(users, f)
 
-    # Приветствие
     caption = "👋 Добро пожаловать!\n\nНажмите кнопку ниже, чтобы выбрать канал:"
     await message.answer(caption, reply_markup=reply_kb)
 
@@ -49,26 +47,41 @@ async def send_welcome(message: types.Message):
 async def show_channels(message: types.Message):
     await message.answer("Выберите канал:", reply_markup=inline_kb)
 
-# РАССЫЛКА из канала — бот должен быть админом!
+# РАССЫЛКА из канала
 @dp.channel_post_handler()
 async def forward_channel_post(message: types.Message):
     with open(USERS_FILE, "r") as f:
         users = json.load(f)
 
-    # Название канала (откуда пришёл пост)
+    # Добавляем подпись с названием канала
     channel_title = message.chat.title
     prefix = f"📣 <b>Пост из канала:</b> <i>{channel_title}</i>\n\n"
 
     for user_id in users:
         try:
             if message.content_type == "photo":
-                await bot.send_photo(user_id, message.photo[-1].file_id, caption=message.caption or "")
+                await bot.send_photo(
+                    chat_id=user_id,
+                    photo=message.photo[-1].file_id,
+                    caption=prefix + (message.caption or "")
+                )
             elif message.content_type == "video":
-                await bot.send_video(user_id, message.video.file_id, caption=message.caption or "")
+                await bot.send_video(
+                    chat_id=user_id,
+                    video=message.video.file_id,
+                    caption=prefix + (message.caption or "")
+                )
             elif message.content_type == "document":
-                await bot.send_document(user_id, message.document.file_id, caption=message.caption or "")
+                await bot.send_document(
+                    chat_id=user_id,
+                    document=message.document.file_id,
+                    caption=prefix + (message.caption or "")
+                )
             elif message.content_type == "text":
-                await bot.send_message(user_id, message.text)
+                await bot.send_message(
+                    chat_id=user_id,
+                    text=prefix + message.text
+                )
         except Exception as e:
             print(f"❌ Ошибка отправки пользователю {user_id}: {e}")
 
