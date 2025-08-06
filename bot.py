@@ -1,66 +1,69 @@
-import os
 import json
+import os
 from aiogram import Bot, Dispatcher, executor, types
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.dispatcher.filters import CommandStart
 
-API_TOKEN = os.getenv("API_TOKEN")  # Обязательно добавь в Render или .env
-USERS_FILE = "users.json"
-WELCOME_IMAGE = "welcome.jpg"
-
-bot = Bot(token=API_TOKEN, parse_mode="HTML")
+API_TOKEN = os.getenv("API_TOKEN")  # или вставь напрямую: 'your_token_here'
+bot = Bot(token=API_TOKEN, parse_mode='HTML')
 dp = Dispatcher(bot)
 
-# Реплай-кнопка
-reply_kb = ReplyKeyboardMarkup(resize_keyboard=True)
-reply_kb.add(KeyboardButton("📢 Каналы"))
+USERS_FILE = "users.json"
 
-# Инлайн-кнопки
-inline_kb = InlineKeyboardMarkup(row_width=1).add(
-    InlineKeyboardButton("⚽ Спорт", url="https://t.me/sportsoda"),
-    InlineKeyboardButton("📣 Профком", url="https://t.me/profkomsoda"),
-    InlineKeyboardButton("⚠️ ОТиПБ", url="https://t.me/your_invest_channel"),
-    InlineKeyboardButton("💡 Фабрика идей", url="https://t.me/your_invest_channel"),
-    InlineKeyboardButton("❓ Что такое БСА", url="https://t.me/your_invest_channel")
-)
+# Загрузка пользователей
+def load_users():
+    if os.path.exists(USERS_FILE):
+        with open(USERS_FILE, 'r') as f:
+            return json.load(f)
+    return []
 
-# Создание users.json при необходимости
-if not os.path.exists(USERS_FILE):
-    with open(USERS_FILE, "w") as f:
-        json.dump([], f)
-
-# /start — добавление юзера + приветствие с картинкой
-@dp.message_handler(CommandStart())
-async def send_welcome(message: types.Message):
-    with open(USERS_FILE, "r") as f:
-        users = json.load(f)
-
-    if message.from_user.id not in users:
-        users.append(message.from_user.id)
-        with open(USERS_FILE, "w") as f:
+# Сохранение пользователей
+def save_user(user_id):
+    users = load_users()
+    if user_id not in users:
+        users.append(user_id)
+        with open(USERS_FILE, 'w') as f:
             json.dump(users, f)
 
-    caption = "👋 Добро пожаловать!\n\nНажмите кнопку ниже, чтобы открыть меню:"
+# Обработка команды /start
+@dp.message_handler(commands=["start"])
+async def start_handler(message: types.Message):
+    save_user(message.from_user.id)
+
+    # Реплай-клавиатура
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.add(types.KeyboardButton("📢 Каналы"))
+
+    # Приветственное фото + текст
+    photo_path = "welcome.jpg"  # Убедись, что файл есть в директории
+    caption = "👋 <b>Добро пожаловать!</b>\n\nНажмите кнопку ниже, чтобы посмотреть каналы."
+
     try:
-        with open(WELCOME_IMAGE, "rb") as photo:
-            await message.answer_photo(photo, caption=caption, reply_markup=reply_kb)
+        with open(photo_path, 'rb') as photo:
+            await message.answer_photo(photo, caption=caption, reply_markup=keyboard)
     except FileNotFoundError:
-        await message.answer(caption, reply_markup=reply_kb)
+        await message.answer(caption, reply_markup=keyboard)
 
-# Кнопка "📢 Каналы"
+# Обработка кнопки "Каналы"
 @dp.message_handler(lambda msg: msg.text == "📢 Каналы")
-async def show_channels(msg: types.Message):
-    await msg.answer("Выберите интересующий канал:", reply_markup=inline_kb)
+async def show_channels(message: types.Message):
+    inline = types.InlineKeyboardMarkup(row_width=1)
+    inline.add(
+        types.InlineKeyboardButton("🏋 Спорт", url="https://t.me/sportsoda"),
+        types.InlineKeyboardButton("📰 Профком", url="https://t.me/profkomsoda"),
+        types.InlineKeyboardButton("📚 ОТиПБ", url="https://t.me/your_invest_channel"),
+        types.InlineKeyboardButton("💡 Фабрика идей", url="https://t.me/your_invest_channel"),
+        types.InlineKeyboardButton("🧠 Что такое БСА", url="https://t.me/your_invest_channel"),
+    )
+    await message.answer("Выберите интересующий канал:", reply_markup=inline)
 
-# Пересылка постов из каналов
+# Пересылка постов из канала
 @dp.channel_post_handler()
 async def forward_to_users(post: types.Message):
     users = load_users()
 
-    # Подпись для заголовка (если доступен channel username/title)
+    # Название канала
     try:
         channel = await bot.get_chat(post.chat.id)
-        from_info = f"<b>📢 Канал:</b> {channel.title}\n\n"
+        from_info = f"<b>📢 Канал:</b> <i>{channel.title}</i>\n\n"
     except:
         from_info = ""
 
@@ -77,7 +80,7 @@ async def forward_to_users(post: types.Message):
             elif post.animation:
                 await bot.send_animation(user_id, post.animation.file_id, caption=from_info + (post.caption or ""))
             else:
-                await bot.send_message(user_id, f"{from_info}📌 Новый пост в канале.")
+                await bot.send_message(user_id, from_info + "📌 Новый пост в канале.")
         except Exception as e:
             print(f"❌ Ошибка при отправке пользователю {user_id}: {e}")
 
