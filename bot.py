@@ -84,17 +84,17 @@ async def forward_post(message: types.Message):
     for uid in users:
         try:
             if message.photo:
-                await bot.send_photo(uid, message.photo[-1].file_id, caption=full_caption)
+                await bot.send_photo(uid, message.photo[-1].file_id, caption=full_caption, disable_web_page_preview=True)
             elif message.video:
-                await bot.send_video(uid, message.video.file_id, caption=full_caption)
+                await bot.send_video(uid, message.video.file_id, caption=full_caption disable_web_page_preview=True)
             elif message.document:
-                await bot.send_document(uid, message.document.file_id, caption=full_caption)
+                await bot.send_document(uid, message.document.file_id, caption=full_caption disable_web_page_preview=True)
             elif message.animation:
-                await bot.send_animation(uid, message.animation.file_id, caption=full_caption)
+                await bot.send_animation(uid, message.animation.file_id, caption=full_caption disable_web_page_preview=True)
             elif message.text:
-                await bot.send_message(uid, full_caption)
+                await bot.send_message(uid, full_caption, disable_web_page_preview=True)
             else:
-                await bot.send_message(uid, from_info + "📌 Новый пост в канале.")
+                await bot.send_message(uid, from_info + "📌 Новый пост в канале.", disable_web_page_preview=True)
         except:
             pass  # опционально: логировать ошибку для uid
 
