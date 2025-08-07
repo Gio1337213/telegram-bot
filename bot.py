@@ -5,7 +5,7 @@ from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.dispatcher.filters import CommandStart
-from aiogram.dispatcher.webhook import get_new_configured_app
+from aiogram.dispatcher.webhook import WebhookRequestHandler
 
 # === Настройки окружения ===
 API_TOKEN = os.getenv("BOT_TOKEN")
@@ -68,7 +68,7 @@ async def show_channels(message: types.Message):
 
 @dp.message_handler(commands=["list_users"])
 async def list_users_handler(message: types.Message):
-    if message.from_user.id != 6050553187:
+    if message.from_user.id != ADMIN_ID:
         await message.answer("⛔ У тебя нет доступа к этой команде.")
         return
 
@@ -131,7 +131,7 @@ async def on_shutdown(app):
         pass
 
 app = web.Application()
-app.router.add_post(WEBHOOK_PATH, get_new_configured_app(dispatcher=dp, path=WEBHOOK_PATH))
+app.router.add_post(WEBHOOK_PATH, WebhookRequestHandler(dispatcher=dp))
 app.on_startup.append(on_startup)
 app.on_shutdown.append(on_shutdown)
 
