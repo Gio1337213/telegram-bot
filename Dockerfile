@@ -1,17 +1,6 @@
-# Используем официальный Python 3.10 образ
-FROM python:3.10.13-slim
-
-# Устанавливаем рабочую директорию
+FROM python:3.10
 WORKDIR /app
-
-# Копируем зависимости
-COPY requirements.txt .
-
-# Устанавливаем зависимости
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Копируем весь код
 COPY . .
-
-# Команда запуска (замени на свой файл, если нужно)
+RUN pip install --no-cache-dir -r requirements.txt
+ENV PORT=10000
 CMD ["python", "bot.py"]
