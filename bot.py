@@ -7,6 +7,14 @@ from aiogram.dispatcher.filters import CommandStart
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.executor import start_webhook
 
+# === Логирование ===
+logging.basicConfig(
+    filename='bot.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+)
+
+# === Настройки ===
 API_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_HOST = os.getenv("WEBHOOK_HOST")
 DB_URL = os.getenv("DATABASE_URL")
@@ -17,12 +25,11 @@ WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 WEBAPP_HOST = "0.0.0.0"
 WEBAPP_PORT = int(os.getenv("PORT", 8000))
 
-logging.basicConfig(level=logging.INFO)
-
 bot = Bot(token=API_TOKEN, parse_mode="HTML")
 dp = Dispatcher(bot)
 db_pool = None
 
+# === Клавиатуры ===
 reply_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(KeyboardButton("📢 Каналы"))
 inline_kb = InlineKeyboardMarkup(row_width=1).add(
     InlineKeyboardButton("🏋 ️ Спорт", url="https://t.me/sportsoda"),
@@ -31,7 +38,7 @@ inline_kb = InlineKeyboardMarkup(row_width=1).add(
     InlineKeyboardButton("💡 Фабрика идей", url="https://t.me/your_invest_channel")
 )
 
-# Database
+# === База данных ===
 async def create_pool():
     return await asyncpg.create_pool(dsn=DB_URL)
 
@@ -49,7 +56,7 @@ async def get_users():
         rows = await conn.fetch("SELECT id FROM users")
         return [row["id"] for row in rows]
 
-# Handlers
+# === Хендлеры ===
 @dp.message_handler(CommandStart())
 async def start(message: types.Message):
     await add_user(message.from_user.id)
@@ -63,16 +70,12 @@ async def start(message: types.Message):
 async def channels(message: types.Message):
     await message.answer("Выберите интересующий канал:", reply_markup=inline_kb)
 
-# Debug logging
-@dp.message_handler(content_types=types.ContentType.ANY)
-async def debug_all_messages(msg: types.Message):
-    await bot.send_message(ADMIN_ID, f"[DEBUG MESSAGE] {msg.content_type}")
-
-@dp.channel_post_handler(content_types=types.ContentType.ANY)
-async def debug_channel_post(message: types.Message):
-    await bot.send_message(ADMIN_ID, f"[DEBUG CHANNEL_POST] type: {message.content_type}")
-
+# === Рассылка постов ===
+@dp.channel_post_handler()
+async def forward_post(message: types.Message):
+    users = await get_users()
     caption = message.caption or message.text or ""
+
     try:
         channel = await bot.get_chat(message.chat.id)
         from_info = f"<b>📢 Канал:</b> <i>{channel.title}</i>\n\n"
@@ -83,8 +86,7 @@ async def debug_channel_post(message: types.Message):
     if len(full_caption) > 1024:
         full_caption = full_caption[:1020] + "..."
 
-    users = await get_users()
-    await bot.send_message(ADMIN_ID, f"📨 Рассылаю пост {message.message_id} {message.content_type} {len(users)} пользователям")
+    logging.info(f"Пост из канала {message.chat.id} — Рассылка на {len(users)} пользователей.")
 
     for uid in users:
         try:
@@ -101,19 +103,21 @@ async def debug_channel_post(message: types.Message):
             else:
                 await bot.send_message(uid, from_info + "📌 Новый пост в канале.")
         except Exception as e:
-            await bot.send_message(ADMIN_ID, f"❌ Не отправлено {uid}: {e}")
+            logging.warning(f"Не удалось отправить сообщение пользователю {uid}: {e}")
 
-# Webhook setup
+# === Webhook ===
 async def on_startup(dp):
     global db_pool
     db_pool = await create_pool()
     await bot.set_webhook(WEBHOOK_URL)
-    await bot.send_message(ADMIN_ID, f"✅ Webhook установлен: {WEBHOOK_URL}")
+    logging.info(f"Webhook установлен: {WEBHOOK_URL}")
 
 async def on_shutdown(dp):
     await bot.delete_webhook()
     await bot.session.close()
+    logging.info("Webhook удалён и бот выключен")
 
+# === Запуск ===
 if __name__ == '__main__':
     start_webhook(
         dispatcher=dp,
