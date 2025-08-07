@@ -1,4 +1,4 @@
-import os
+"import os
 import logging
 from aiohttp import web
 import asyncpg
@@ -13,6 +13,8 @@ from aiogram.utils.executor import start_webhook
 API_TOKEN = os.getenv("BOT_TOKEN")
 DB_URL = os.getenv("DATABASE_URL")
 WEBHOOK_HOST = os.getenv("WEBHOOK_HOST")
+ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
+
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 WEBAPP_HOST = "0.0.0.0"
@@ -44,6 +46,20 @@ async def start_handler(message: Message):
 
     await message.answer("Привет! Ты добавлен в базу данных.")
     print(f"Пользователь {user_id} добавлен в базу данных.")
+
+@dp.message_handler(commands=["list_users"])
+async def list_users_handler(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("⛔ У тебя нет доступа к этой команде.")
+        return
+
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("SELECT id FROM users")
+        if rows:
+            user_list = "\n".join(str(row["id"]) for row in rows)
+            await message.answer(f"👥 Список пользователей:\n{user_list}")
+        else:
+            await message.answer("Пока что нет ни одного пользователя в базе данных.")
 
 async def on_startup(app):
     global db_pool
