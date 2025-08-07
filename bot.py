@@ -1,14 +1,16 @@
 import os
 import asyncpg
-import re
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 from aiogram.dispatcher.filters import CommandStart
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import (
+    ReplyKeyboardMarkup, KeyboardButton, 
+    InlineKeyboardMarkup, InlineKeyboardButton
+)
 from aiogram.utils.executor import start_webhook
 
 API_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_HOST = os.getenv("WEBHOOK_HOST")  # Пример: https://your-app.onrender.com
+WEBHOOK_HOST = os.getenv("WEBHOOK_HOST")
 DB_URL = os.getenv("DATABASE_URL")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 
@@ -21,25 +23,35 @@ bot = Bot(token=API_TOKEN, parse_mode="HTML")
 dp = Dispatcher(bot)
 db_pool = None
 
-# Клавиатуры
-reply_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(KeyboardButton("📢 Каналы"))
-inline_kb = InlineKeyboardMarkup(row_width=1).add(
-    InlineKeyboardButton("🏋 ️ Спорт", url="https://t.me/sportsoda"),
-    InlineKeyboardButton("📜 Профком", url="https://t.me/profkomsoda"),
-    InlineKeyboardButton("📚 ОТиПБ", url="https://t.me/your_invest_channel"),
-    InlineKeyboardButton("💡 Фабрика идей", url="https://t.me/your_invest_channel")
-)
+reply_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(KeyboardButton("\ud83d\udce2 Каналы"))
 
-# База данных
+channels = {
+    "sport": ("\ud83c\udfcb Спорт", "https://t.me/sportsoda"),
+    "profkom": ("\ud83d\udcdc Профком", "https://t.me/profkomsoda"),
+    "ideas": ("\ud83d\udca1 Фабрика идей", "http"),
+    "safety": ("\ud83d\udcda ОТиПБ", "http")
+}
+
+def subscription_keyboard(user_subs):
+    buttons = []
+    for key, (name, _) in channels.items():
+        mark = "✅" if key in user_subs else "❌"
+        buttons.append([InlineKeyboardButton(f"{name} {mark}", callback_data=f"toggle:{key}")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+# DB
 async def create_pool():
     return await asyncpg.create_pool(dsn=DB_URL)
 
 async def add_user(user_id):
     async with db_pool.acquire() as conn:
         await conn.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id BIGINT PRIMARY KEY
-            )
+            CREATE TABLE IF NOT EXISTS users (id BIGINT PRIMARY KEY);
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                user_id BIGINT,
+                channel_key TEXT,
+                PRIMARY KEY (user_id, channel_key)
+            );
         """)
         await conn.execute("INSERT INTO users (id) VALUES ($1) ON CONFLICT DO NOTHING", user_id)
 
@@ -48,60 +60,76 @@ async def get_users():
         rows = await conn.fetch("SELECT id FROM users")
         return [row["id"] for row in rows]
 
+async def get_user_subs(user_id):
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("SELECT channel_key FROM subscriptions WHERE user_id = $1", user_id)
+        return [row["channel_key"] for row in rows]
+
+async def get_channel_subscribers(channel_key):
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("SELECT user_id FROM subscriptions WHERE channel_key = $1", channel_key)
+        return [row["user_id"] for row in rows]
+
 # Хендлеры
 @dp.message_handler(CommandStart())
 async def start(message: types.Message):
     await add_user(message.from_user.id)
-    try:
-        with open("welcome.jpg", "rb") as photo:
-            await message.answer_photo(photo, caption="👋 <b>Добро пожаловать!</b>\n\nНажмите кнопку ниже, чтобы посмотреть каналы.", reply_markup=reply_kb)
-    except FileNotFoundError:
-        await message.answer("👋 <b>Добро пожаловать!</b>\n\nНажмите кнопку ниже, чтобы посмотреть каналы.", reply_markup=reply_kb)
+    subs = await get_user_subs(message.from_user.id)
+    await message.answer("Выберите интересующие каналы:", reply_markup=subscription_keyboard(subs))
 
-@dp.message_handler(lambda msg: msg.text == "📢 Каналы")
-async def channels(message: types.Message):
-    await message.answer("Выберите интересующий канал:", reply_markup=inline_kb)
+@dp.message_handler(lambda msg: msg.text == "\ud83d\udce2 Каналы")
+async def channels_list(message: types.Message):
+    subs = await get_user_subs(message.from_user.id)
+    await message.answer("Вы можете подписаться или отписаться от каналов:", reply_markup=subscription_keyboard(subs))
 
-# Обработка постов из канала (включая медиа)
+@dp.callback_query_handler(lambda c: c.data.startswith("toggle:"))
+async def toggle_subscription(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    key = callback.data.split(":")[1]
+    async with db_pool.acquire() as conn:
+        exists = await conn.fetchval("SELECT 1 FROM subscriptions WHERE user_id=$1 AND channel_key=$2", user_id, key)
+        if exists:
+            await conn.execute("DELETE FROM subscriptions WHERE user_id=$1 AND channel_key=$2", user_id, key)
+        else:
+            await conn.execute("INSERT INTO subscriptions (user_id, channel_key) VALUES ($1, $2)", user_id, key)
+        rows = await conn.fetch("SELECT channel_key FROM subscriptions WHERE user_id=$1", user_id)
+        subs = [r['channel_key'] for r in rows]
+    await callback.message.edit_reply_markup(reply_markup=subscription_keyboard(subs))
+    await callback.answer("Обновлено ✅")
+
 @dp.channel_post_handler(content_types=types.ContentType.ANY)
 async def forward_post(message: types.Message):
+    # Определи канал по username или chat_id:
+    channel_key = None
+    if message.chat.username == "profkomsoda":
+        channel_key = "profkom"
+    elif message.chat.username == "sportsoda":
+        channel_key = "sport"
+    # и т.д.
+
+    if not channel_key:
+        return
+
     caption = message.caption or message.text or ""
-
-    # Удаляем @упоминания, но оставляем ссылки
-    clean_caption = re.sub(r'@\w+', '', caption).strip()
-
-    try:
-        channel = await bot.get_chat(message.chat.id)
-        if channel.username:
-            post_link = f"https://t.me/{channel.username}/{message.message_id}"
-            from_info = f'<b>📢 <a href="{post_link}">{channel.title}</a></b>\n\n'
-        else:
-            from_info = f"<b>📢 Канал:</b> <i>{channel.title}</i>\n\n"
-    except:
-        from_info = ""
-
-    full_caption = from_info + clean_caption
+    full_caption = f"<b>\ud83d\udce2 <a href='https://t.me/{message.chat.username}/{message.message_id}'>{message.chat.title}</a></b>\n\n" + caption
     if len(full_caption) > 1024:
         full_caption = full_caption[:1020] + "..."
 
-    users = await get_users()
-
+    users = await get_channel_subscribers(channel_key)
     for uid in users:
         try:
             if message.photo:
                 await bot.send_photo(uid, message.photo[-1].file_id, caption=full_caption)
             elif message.video:
                 await bot.send_video(uid, message.video.file_id, caption=full_caption)
-            elif message.document:
-                await bot.send_document(uid, message.document.file_id, caption=full_caption)
             elif message.animation:
                 await bot.send_animation(uid, message.animation.file_id, caption=full_caption)
+            elif message.document:
+                await bot.send_document(uid, message.document.file_id, caption=full_caption)
             elif message.text:
                 await bot.send_message(uid, full_caption, disable_web_page_preview=True)
-            else:
-                await bot.send_message(uid, from_info + "📌 Новый пост в канале.", disable_web_page_preview=True)
         except:
-            pass
+            continue
 
 # Webhook
 async def on_startup(dp):
