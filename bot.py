@@ -67,7 +67,11 @@ async def forward_post(message: types.Message):
     caption = message.caption or message.text or ""
     try:
         channel = await bot.get_chat(message.chat.id)
-        from_info = f"<b>📢 Канал:</b> <i>{channel.title}</i>\n\n"
+        if channel.username:
+            post_link = f"https://t.me/{channel.username}/{message.message_id}"
+            from_info = f'<b>📢 <a href="{post_link}">{channel.title}</a></b>\n\n'
+        else:
+            from_info = f"<b>📢 Канал:</b> <i>{channel.title}</i>\n\n"
     except:
         from_info = ""
 
@@ -92,7 +96,7 @@ async def forward_post(message: types.Message):
             else:
                 await bot.send_message(uid, from_info + "📌 Новый пост в канале.")
         except:
-            pass  # опционально: логировать ошибку для uid
+            pass  
 
 # Webhook
 async def on_startup(dp):
