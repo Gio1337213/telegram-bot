@@ -1,11 +1,13 @@
 import os
 import logging
 import asyncpg
-from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.dispatcher.filters import CommandStart
-from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from aiogram.utils.executor import start_webhook
+
+# === Логирование ===
+logging.basicConfig(level=logging.INFO)
 
 # === Настройки окружения ===
 API_TOKEN = os.getenv("BOT_TOKEN")
@@ -18,7 +20,7 @@ WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 WEBAPP_HOST = "0.0.0.0"
 WEBAPP_PORT = int(os.getenv("PORT", default=8000))
 
-# === Инициализация ===
+# === Инициализация бота ===
 bot = Bot(token=API_TOKEN, parse_mode="HTML")
 dp = Dispatcher(bot)
 
@@ -84,7 +86,7 @@ async def list_users_handler(message: types.Message):
 async def forward_post(message: types.Message):
     users = await get_all_users()
     if not users:
-        print("[LOG] Нет пользователей для рассылки.")
+        logging.info("[LOG] Нет пользователей для рассылки.")
         return
 
     try:
@@ -97,7 +99,7 @@ async def forward_post(message: types.Message):
     if len(caption) > 1024:
         caption = caption[:1020] + "..."
 
-    print(f"[LOG] Рассылка {len(users)} пользователям...")
+    logging.info(f"[LOG] Рассылка {len(users)} пользователям...")
 
     for user_id in users:
         try:
@@ -114,29 +116,27 @@ async def forward_post(message: types.Message):
             else:
                 await bot.send_message(user_id, from_info + "📌 Новый пост в канале.")
         except Exception as e:
-            print(f"❌ Ошибка отправки {user_id}: {e}")
+            logging.warning(f"❌ Ошибка отправки {user_id}: {e}")
 
-# === Webhook ===
-async def on_startup(app):
+# === Webhook запуск ===
+async def on_startup(dp):
     global db_pool
     db_pool = await create_pool()
-    print(f"📡 Устанавливаю Webhook: {WEBHOOK_URL}")
+    logging.info(f"📡 Устанавливаю Webhook: {WEBHOOK_URL}")
     await bot.set_webhook(WEBHOOK_URL)
 
-async def on_shutdown(app):
-    try:
-        await bot.delete_webhook()
-        await bot.session.close()
-    except:
-        pass
-
-
-app = web.Application()
-SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
-setup_application(app, dp, bot=bot)
-
-app.on_startup.append(on_startup)
-app.on_shutdown.append(on_shutdown)
+async def on_shutdown(dp):
+    logging.info("🔌 Отключаю webhook и сессию...")
+    await bot.delete_webhook()
+    await bot.session.close()
 
 if __name__ == '__main__':
-    web.run_app(app, host=WEBAPP_HOST, port=WEBAPP_PORT)
+    start_webhook(
+        dispatcher=dp,
+        webhook_path=WEBHOOK_PATH,
+        on_startup=on_startup,
+        on_shutdown=on_shutdown,
+        skip_updates=True,
+        host=WEBAPP_HOST,
+        port=WEBAPP_PORT,
+    )
