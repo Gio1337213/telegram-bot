@@ -120,7 +120,7 @@ async def on_startup(app):
     global db_pool
     db_pool = await create_pool()
     await bot.set_webhook(WEBHOOK_URL)
-    print(f"\ud83d\udce1 Webhook установлен: {WEBHOOK_URL}")
+    print(f"Webhook установлен: {WEBHOOK_URL}")
 
 async def on_shutdown(app):
     await bot.delete_webhook()
