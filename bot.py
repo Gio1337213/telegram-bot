@@ -25,7 +25,8 @@ db_pool = None
 channel_map = {
     "sportsoda": "🏋 ️ Спорт",
     "profkomsoda": "📜 Профком",
-    "your_invest_channel": "📚 ОТиПБ / 💡 Фабрика идей",
+    "FabrikaIdeySoda":  "💡 Фабрика идей",
+    "LINK":  "📚 ОТиПБ"
 }
 
 # Клавиатура с двумя кнопками
@@ -90,7 +91,7 @@ async def manage_subscriptions(message: types.Message):
     await message.answer("Выберите темы для получения уведомлений:", reply_markup=kb)
 
 # Обработка нажатия на кнопку подписки/отписки
-@dp.callback_query_handler(lambda c: c.data.startswith("toggle_sub:"))
+dp.callback_query_handler(lambda c: c.data.startswith("toggle_sub:"))
 async def toggle_subscription(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     channel = callback.data.split(":")[1]
@@ -106,13 +107,15 @@ async def toggle_subscription(callback: types.CallbackQuery):
             await conn.execute("""
                 DELETE FROM user_subscriptions WHERE user_id=$1 AND channel_name=$2
             """, user_id, channel)
-            await callback.answer("❌ Отписка от канала")
+            await callback.answer("❌ Отписка от канала", show_alert=False)
+            await bot.send_message(user_id, f"❌ Вы отписались от рассылки: <b>{channel_map.get(channel, channel)}</b>")
         else:
             await conn.execute("""
                 INSERT INTO user_subscriptions (user_id, channel_name)
                 VALUES ($1, $2) ON CONFLICT DO NOTHING
             """, user_id, channel)
-            await callback.answer("✅ Подписка оформлена")
+            await callback.answer("✅ Подписка оформлена", show_alert=False)
+            await bot.send_message(user_id, f"✅ Вы подписались на рассылку: <b>{channel_map.get(channel, channel)}</b>")
 
 # Обработка постов из канала (включая медиа)
 @dp.channel_post_handler(content_types=types.ContentType.ANY)
