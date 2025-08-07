@@ -1,10 +1,12 @@
 import os
+import json
 import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.dispatcher.filters import CommandStart
 from aiogram.dispatcher.webhook import get_new_configured_app
 from aiohttp import web
+from aiohttp import ClientSession
 import asyncpg
 
 # === Настройки ===
@@ -14,14 +16,14 @@ WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 WEBAPP_HOST = "0.0.0.0"
 WEBAPP_PORT = int(os.getenv("PORT", default=10000))
-DB_URL = os.getenv("DATABASE_URL")  # Render должен добавить эту переменную автоматически
+DB_URL = os.getenv("postgresql://telegram_bot_db_1nn8_user:Xu7cM4HqwLSlb60RzmScQSz6eCzRSHKG@dpg-d2a5bp15pdvs73ad634g-a/telegram_bot_db_1nn8")  # URL PostgreSQL от Render
 
 logging.basicConfig(level=logging.INFO)
 
 # === Инициализация ===
 bot = Bot(token=API_TOKEN, parse_mode="HTML")
 dp = Dispatcher(bot)
-db_pool = None  # глобальная переменная для пула соединений
+db_pool = None  # создаём позже в on_startup
 
 # === Интерфейс ===
 reply_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(KeyboardButton("📢 Каналы"))
@@ -66,7 +68,7 @@ async def show_channels(message: types.Message):
 async def forward_post(message: types.Message):
     users = await get_all_users()
     if not users:
-        logging.info("[LOG] Нет пользователей для рассылки.")
+        print("[LOG] Нет пользователей для рассылки.")
         return
 
     try:
@@ -79,8 +81,8 @@ async def forward_post(message: types.Message):
     if len(caption) > 1024:
         caption = caption[:1020] + "..."
 
-    logging.info(f"[LOG] Получен пост из канала: {channel.title if 'channel' in locals() else message.chat.id}")
-    logging.info(f"[LOG] Рассылка {len(users)} пользователям...")
+    print(f"[LOG] Получен пост из канала: {channel.title if 'channel' in locals() else message.chat.id}")
+    print(f"[LOG] Рассылка {len(users)} пользователям...")
 
     for user_id in users:
         try:
@@ -97,22 +99,12 @@ async def forward_post(message: types.Message):
             else:
                 await bot.send_message(user_id, from_info + "📌 Новый пост в канале.")
         except Exception as e:
-            logging.error(f"❌ Ошибка отправки {user_id}: {e}")
+            print(f"❌ Ошибка отправки {user_id}: {e}")
 
-# === Вебхук и создание таблицы ===
+# === Вебхук ===
 async def on_startup(app):
     global db_pool
     db_pool = await create_pool()
-
-    # Создание таблицы при старте бота
-    async with db_pool.acquire() as conn:
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id BIGINT PRIMARY KEY
-            );
-        """)
-        logging.info("✅ Таблица 'users' создана или уже существует.")
-
     logging.info(f"📡 Устанавливаю Webhook: {WEBHOOK_URL}")
     await bot.set_webhook(WEBHOOK_URL)
 
