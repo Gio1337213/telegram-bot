@@ -62,12 +62,15 @@ async def get_users_by_channel(channel_username):
         return [row["user_id"] for row in rows]
 
 def get_subscription_kb(user_subs):
-    kb = InlineKeyboardMarkup(row_width=1)
+    kb = InlineKeyboardMarkup(row_width=2)
     for username, title in channels_data.items():
         subscribed = username in user_subs
-        status = "✅" if subscribed else ""
-        action = "unsubscribe" if subscribed else "subscribe"
-        kb.add(InlineKeyboardButton(f"{status} {title}", callback_data=f"{action}:{username}"))
+        sub_action = "unsubscribe" if subscribed else "subscribe"
+        sub_label = "✅ Отписаться" if subscribed else "📥 Подписаться"
+        kb.add(
+            InlineKeyboardButton(sub_label, callback_data=f"{sub_action}:{username}"),
+            InlineKeyboardButton("🔗 Канал", url=f"https://t.me/{username}")
+        )
     return kb
 
 @dp.message_handler(CommandStart())
