@@ -91,7 +91,7 @@ async def manage_subscriptions(message: types.Message):
     await message.answer("Выберите темы для получения уведомлений:", reply_markup=kb)
 
 # Обработка нажатия на кнопку подписки/отписки
-dp.callback_query_handler(lambda c: c.data.startswith("toggle_sub:"))
+@dp.callback_query_handler(lambda c: c.data.startswith("toggle_sub:"))
 async def toggle_subscription(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     channel = callback.data.split(":")[1]
