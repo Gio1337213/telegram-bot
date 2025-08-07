@@ -1,5 +1,6 @@
 import os
 import asyncpg
+import re
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 from aiogram.dispatcher.filters import CommandStart
@@ -65,6 +66,11 @@ async def channels(message: types.Message):
 @dp.channel_post_handler(content_types=types.ContentType.ANY)
 async def forward_post(message: types.Message):
     caption = message.caption or message.text or ""
+    
+    # Очистка caption от ссылок на Telegram и упоминаний
+    clean_caption = re.sub(r'https?://t\.me/\S+', '', caption)
+    clean_caption = re.sub(r'@\w+', '', clean_caption)
+
     try:
         channel = await bot.get_chat(message.chat.id)
         if channel.username:
@@ -75,7 +81,7 @@ async def forward_post(message: types.Message):
     except:
         from_info = ""
 
-    full_caption = from_info + caption
+    full_caption = from_info + clean_caption.strip()
     if len(full_caption) > 1024:
         full_caption = full_caption[:1020] + "..."
 
@@ -86,11 +92,11 @@ async def forward_post(message: types.Message):
             if message.photo:
                 await bot.send_photo(uid, message.photo[-1].file_id, caption=full_caption, disable_web_page_preview=True)
             elif message.video:
-                await bot.send_video(uid, message.video.file_id, caption=full_caption disable_web_page_preview=True)
+                await bot.send_video(uid, message.video.file_id, caption=full_caption, disable_web_page_preview=True)
             elif message.document:
-                await bot.send_document(uid, message.document.file_id, caption=full_caption disable_web_page_preview=True)
+                await bot.send_document(uid, message.document.file_id, caption=full_caption, disable_web_page_preview=True)
             elif message.animation:
-                await bot.send_animation(uid, message.animation.file_id, caption=full_caption disable_web_page_preview=True)
+                await bot.send_animation(uid, message.animation.file_id, caption=full_caption, disable_web_page_preview=True)
             elif message.text:
                 await bot.send_message(uid, full_caption, disable_web_page_preview=True)
             else:
