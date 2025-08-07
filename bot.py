@@ -21,25 +21,12 @@ bot = Bot(token=API_TOKEN, parse_mode="HTML")
 dp = Dispatcher(bot)
 db_pool = None
 
-# Карта каналов: username -> название
-channel_map = {
-    "sportsoda": "🏋 ️ Спорт",
-    "profkomsoda": "📜 Профком",
-    "FabrikaIdeySoda":  "💡 Фабрика идей",
-    "LINK":  "📚 ОТиПБ"
-}
-
-# Клавиатура с двумя кнопками
-reply_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(
-    KeyboardButton("📢 Каналы"),
-    KeyboardButton("🔔 Подписки")
-)
-
-# Кнопки со ссылками на каналы
+# Клавиатуры
+reply_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(KeyboardButton("📢 Каналы"))
 inline_kb = InlineKeyboardMarkup(row_width=1).add(
     InlineKeyboardButton("🏋 ️ Спорт", url="https://t.me/sportsoda"),
     InlineKeyboardButton("📜 Профком", url="https://t.me/profkomsoda"),
-    InlineKeyboardButton("📚 ОТиПБ", url="https://t.me/FabrikaIdeySoda"),
+    InlineKeyboardButton("📚 ОТиПБ", url="https://t.me/your_invest_channel"),
     InlineKeyboardButton("💡 Фабрика идей", url="https://t.me/your_invest_channel")
 )
 
@@ -52,13 +39,7 @@ async def add_user(user_id):
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id BIGINT PRIMARY KEY
-            );
-            CREATE TABLE IF NOT EXISTS user_subscriptions (
-                user_id BIGINT,
-                channel_name TEXT,
-                PRIMARY KEY (user_id, channel_name),
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
+            )
         """)
         await conn.execute("INSERT INTO users (id) VALUES ($1) ON CONFLICT DO NOTHING", user_id)
 
@@ -67,7 +48,7 @@ async def get_users():
         rows = await conn.fetch("SELECT id FROM users")
         return [row["id"] for row in rows]
 
-# Хендлер /start
+# Хендлеры
 @dp.message_handler(CommandStart())
 async def start(message: types.Message):
     await add_user(message.from_user.id)
@@ -77,75 +58,35 @@ async def start(message: types.Message):
     except FileNotFoundError:
         await message.answer("👋 <b>Добро пожаловать!</b>\n\nНажмите кнопку ниже, чтобы посмотреть каналы.", reply_markup=reply_kb)
 
-# Кнопка "📢 Каналы"
 @dp.message_handler(lambda msg: msg.text == "📢 Каналы")
 async def channels(message: types.Message):
     await message.answer("Выберите интересующий канал:", reply_markup=inline_kb)
-
-# Кнопка "🔔 Подписки"
-@dp.message_handler(lambda msg: msg.text == "🔔 Подписки")
-async def manage_subscriptions(message: types.Message):
-    kb = InlineKeyboardMarkup(row_width=1)
-    for channel, title in channel_map.items():
-        kb.add(InlineKeyboardButton(f"{title}", callback_data=f"toggle_sub:{channel}"))
-    await message.answer("Выберите темы для получения уведомлений:", reply_markup=kb)
-
-# Обработка нажатия на кнопку подписки/отписки
-@dp.callback_query_handler(lambda c: c.data.startswith("toggle_sub:"))
-async def toggle_subscription(callback: types.CallbackQuery):
-    user_id = callback.from_user.id
-    channel = callback.data.split(":")[1]
-
-    async with db_pool.acquire() as conn:
-        subscribed = await conn.fetchval("""
-            SELECT EXISTS (
-                SELECT 1 FROM user_subscriptions WHERE user_id=$1 AND channel_name=$2
-            )
-        """, user_id, channel)
-
-        if subscribed:
-            await conn.execute("""
-                DELETE FROM user_subscriptions WHERE user_id=$1 AND channel_name=$2
-            """, user_id, channel)
-            await callback.answer("❌ Отписка от канала", show_alert=False)
-            await bot.send_message(user_id, f"❌ Вы отписались от рассылки: <b>{channel_map.get(channel, channel)}</b>")
-        else:
-            await conn.execute("""
-                INSERT INTO user_subscriptions (user_id, channel_name)
-                VALUES ($1, $2) ON CONFLICT DO NOTHING
-            """, user_id, channel)
-            await callback.answer("✅ Подписка оформлена", show_alert=False)
-            await bot.send_message(user_id, f"✅ Вы подписались на рассылку: <b>{channel_map.get(channel, channel)}</b>")
 
 # Обработка постов из канала (включая медиа)
 @dp.channel_post_handler(content_types=types.ContentType.ANY)
 async def forward_post(message: types.Message):
     caption = message.caption or message.text or ""
+
+    # Удаляем @упоминания, но оставляем ссылки
     clean_caption = re.sub(r'@\w+', '', caption).strip()
 
     try:
         channel = await bot.get_chat(message.chat.id)
-        channel_name = channel.username
-        if channel_name in channel_map:
-            title = channel_map[channel_name]
-            post_link = f"https://t.me/{channel_name}/{message.message_id}"
-            from_info = f'<b>📢 <a href="{post_link}">{title}</a></b>\n\n'
+        if channel.username:
+            post_link = f"https://t.me/{channel.username}/{message.message_id}"
+            from_info = f'<b>📢 <a href="{post_link}">{channel.title}</a></b>\n\n'
         else:
-            return  # канал не в списке — пропустить
+            from_info = f"<b>📢 Канал:</b> <i>{channel.title}</i>\n\n"
     except:
-        return
+        from_info = ""
 
     full_caption = from_info + clean_caption
     if len(full_caption) > 1024:
         full_caption = full_caption[:1020] + "..."
 
-    async with db_pool.acquire() as conn:
-        rows = await conn.fetch("""
-            SELECT user_id FROM user_subscriptions WHERE channel_name=$1
-        """, channel_name)
-        user_ids = [r["user_id"] for r in rows]
+    users = await get_users()
 
-    for uid in user_ids:
+    for uid in users:
         try:
             if message.photo:
                 await bot.send_photo(uid, message.photo[-1].file_id, caption=full_caption)
@@ -166,10 +107,7 @@ async def forward_post(message: types.Message):
 async def on_startup(dp):
     global db_pool
     db_pool = await create_pool()
-    await bot.set_webhook(
-        WEBHOOK_URL,
-        allowed_updates=["message", "callback_query"]
-    )
+    await bot.set_webhook(WEBHOOK_URL)
 
 async def on_shutdown(dp):
     await bot.delete_webhook()
