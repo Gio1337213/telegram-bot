@@ -65,41 +65,20 @@ async def channels(message: types.Message):
 
 # Рассылка постов
 @dp.channel_post_handler()
-async def forward_post(message: types.Message):
-    await bot.send_message(ADMIN_ID, f"🟢 Новый пост {message.message_id} из канала {message.chat.id}")
-
-    users = await get_users()
-    caption = message.caption or message.text or ""
-
+async def debug_channel_post(message: types.Message):
     try:
-        channel = await bot.get_chat(message.chat.id)
-        from_info = f"<b>📢 Канал:</b> <i>{channel.title}</i>\n\n"
+        await bot.send_message(ADMIN_ID, f"📥 Получен пост из канала.\n"
+                                         f"ID: <code>{message.message_id}</code>\n"
+                                         f"Тип: {'Фото' if message.photo else 'Нет фото'}")
+
+        if message.photo:
+            await bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption="✅ Фото получено через webhook")
+        elif message.text:
+            await bot.send_message(ADMIN_ID, f"Текст: {message.text}")
+        else:
+            await bot.send_message(ADMIN_ID, "❓ Неизвестный формат сообщения")
     except Exception as e:
-        from_info = ""
-        await bot.send_message(ADMIN_ID, f"⚠️ Ошибка при получении названия канала:\n{repr(e)}")
-
-    full_caption = from_info + caption
-    if len(full_caption) > 1024:
-        full_caption = full_caption[:1020] + "..."
-
-    await bot.send_message(ADMIN_ID, f"✉️ Рассылаю пост {message.message_id} {len(users)} пользователям")
-
-    for uid in users:
-        try:
-            if message.photo and len(message.photo) > 0:
-                await bot.send_photo(uid, message.photo[-1].file_id, caption=full_caption)
-            elif message.video:
-                await bot.send_video(uid, message.video.file_id, caption=full_caption)
-            elif message.document:
-                await bot.send_document(uid, message.document.file_id, caption=full_caption)
-            elif message.animation:
-                await bot.send_animation(uid, message.animation.file_id, caption=full_caption)
-            elif message.text:
-                await bot.send_message(uid, full_caption)
-            else:
-                await bot.send_message(uid, from_info + "📌 Новый пост в канале.")
-        except Exception as e:
-            await bot.send_message(ADMIN_ID, f"❌ Не отправлено {uid}:\n{repr(e)}")
+        await bot.send_message(ADMIN_ID, f"❌ Ошибка в debug handler: {e}")
 
 
 # === Webhook ===
