@@ -46,12 +46,46 @@ async def add_user(user_id):
                 id BIGINT PRIMARY KEY
             )
         """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS media (
+                id SERIAL PRIMARY KEY,
+                file_id TEXT NOT NULL,
+                type TEXT NOT NULL,
+                caption TEXT
+            )
+        """)
         await conn.execute("INSERT INTO users (id) VALUES ($1) ON CONFLICT DO NOTHING", user_id)
 
 async def get_all_users():
     async with db_pool.acquire() as conn:
         rows = await conn.fetch("SELECT id FROM users")
         return [row["id"] for row in rows]
+
+async def save_media(file_id: str, media_type: str, caption: str = None):
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO media (file_id, type, caption) VALUES ($1, $2, $3)",
+            file_id, media_type, caption
+        )
+
+async def send_saved_media_to_all_users():
+    users = await get_all_users()
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("SELECT file_id, type, caption FROM media")
+
+    for row in rows:
+        for user_id in users:
+            try:
+                if row["type"] == "photo":
+                    await bot.send_photo(user_id, row["file_id"], caption=row["caption"])
+                elif row["type"] == "video":
+                    await bot.send_video(user_id, row["file_id"], caption=row["caption"])
+                elif row["type"] == "document":
+                    await bot.send_document(user_id, row["file_id"], caption=row["caption"])
+                elif row["type"] == "text":
+                    await bot.send_message(user_id, row["file_id"])
+            except Exception as e:
+                logging.warning(f"Ошибка отправки {user_id}: {e}")
 
 # === Команды ===
 @dp.message_handler(CommandStart())
@@ -80,6 +114,38 @@ async def list_users_handler(message: types.Message):
         await message.answer(f"👥 Список пользователей:\n{user_list}")
     else:
         await message.answer("Пока что нет ни одного пользователя в базе данных.")
+
+@dp.message_handler(commands=["broadcast"], user_id=ADMIN_ID)
+async def broadcast_media(message: types.Message):
+    await message.answer("🚀 Рассылка началась...")
+    await send_saved_media_to_all_users()
+    await message.answer("✅ Рассылка завершена.")
+
+@dp.message_handler(commands=["clear_media"], user_id=ADMIN_ID)
+async def clear_media(message: types.Message):
+    async with db_pool.acquire() as conn:
+        await conn.execute("DELETE FROM media")
+    await message.answer("🗑 Все сохранённые медиа удалены.")
+
+@dp.message_handler(lambda msg: msg.from_user.id == ADMIN_ID, content_types=types.ContentType.ANY)
+async def handle_admin_media(message: types.Message):
+    if message.photo:
+        file_id = message.photo[-1].file_id
+        await save_media(file_id, "photo", message.caption)
+        await message.reply("✅ Фото сохранено в базу.")
+    elif message.video:
+        file_id = message.video.file_id
+        await save_media(file_id, "video", message.caption)
+        await message.reply("✅ Видео сохранено в базу.")
+    elif message.document:
+        file_id = message.document.file_id
+        await save_media(file_id, "document", message.caption)
+        await message.reply("✅ Документ сохранён в базу.")
+    elif message.text:
+        await save_media(message.text, "text")
+        await message.reply("✅ Текст сохранён в базу.")
+    else:
+        await message.reply("⚠️ Тип медиа не поддерживается.")
 
 # === Обработка постов из канала ===
 @dp.channel_post_handler()
