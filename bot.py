@@ -49,7 +49,7 @@ async def start_handler(message: Message):
 
 @dp.message_handler(commands=["list_users"])
 async def list_users_handler(message: Message):
-    if message.from_user.id != ADMIN_ID:
+    if message.from_user.id != 6050553187:
         await message.answer("⛔ У тебя нет доступа к этой команде.")
         return
 
