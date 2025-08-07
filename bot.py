@@ -10,7 +10,6 @@ from aiogram.utils.executor import start_webhook
 API_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_HOST = os.getenv("WEBHOOK_HOST")
 DB_URL = os.getenv("DATABASE_URL")
-ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
@@ -66,11 +65,9 @@ async def channels(message: types.Message):
 # Debug logging
 @dp.message_handler(content_types=types.ContentType.ANY)
 async def debug_all_messages(msg: types.Message):
-    await bot.send_message(ADMIN_ID, f"[DEBUG MESSAGE] {msg.content_type}")
 
 @dp.channel_post_handler(content_types=types.ContentType.ANY)
 async def debug_channel_post(message: types.Message):
-    await bot.send_message(ADMIN_ID, f"[DEBUG CHANNEL_POST] type: {message.content_type}")
 
     caption = message.caption or message.text or ""
     try:
@@ -83,8 +80,6 @@ async def debug_channel_post(message: types.Message):
     if len(full_caption) > 1024:
         full_caption = full_caption[:1020] + "..."
 
-    users = await get_users()
-    await bot.send_message(ADMIN_ID, f"📨 Рассылаю пост {message.message_id} {message.content_type} {len(users)} пользователям")
 
     for uid in users:
         try:
@@ -101,7 +96,7 @@ async def debug_channel_post(message: types.Message):
             else:
                 await bot.send_message(uid, from_info + "📌 Новый пост в канале.")
         except Exception as e:
-            await bot.send_message(ADMIN_ID, f"❌ Не отправлено {uid}: {e}")
+
 
 # Webhook setup
 async def on_startup(dp):
