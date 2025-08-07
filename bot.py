@@ -1,22 +1,14 @@
 import os
 import asyncpg
-import logging
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 from aiogram.dispatcher.filters import CommandStart
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.executor import start_webhook
 
-# === Логирование ===
-logging.basicConfig(
-    filename='bot.log',
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-)
-
 # === Настройки ===
 API_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_HOST = os.getenv("WEBHOOK_HOST")
+WEBHOOK_HOST = os.getenv("WEBHOOK_HOST")  # Пример: https://your-app.onrender.com
 DB_URL = os.getenv("DATABASE_URL")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 
@@ -86,7 +78,7 @@ async def forward_post(message: types.Message):
     if len(full_caption) > 1024:
         full_caption = full_caption[:1020] + "..."
 
-    logging.info(f"Пост из канала {message.chat.id} — Рассылка на {len(users)} пользователей.")
+    await bot.send_message(ADMIN_ID, f"✉️ Пост из канала: {message.message_id}, рассылаю {len(users)} пользователям")
 
     for uid in users:
         try:
@@ -102,22 +94,20 @@ async def forward_post(message: types.Message):
                 await bot.send_message(uid, full_caption)
             else:
                 await bot.send_message(uid, from_info + "📌 Новый пост в канале.")
-        except Exception as e:
-            logging.warning(f"Не удалось отправить сообщение пользователю {uid}: {e}")
+        except Exception:
+            pass  # Ошибки не показываем и не логируем
 
 # === Webhook ===
 async def on_startup(dp):
     global db_pool
     db_pool = await create_pool()
     await bot.set_webhook(WEBHOOK_URL)
-    logging.info(f"Webhook установлен: {WEBHOOK_URL}")
+    await bot.send_message(ADMIN_ID, f"Webhook активен: {WEBHOOK_URL}")
 
 async def on_shutdown(dp):
     await bot.delete_webhook()
     await bot.session.close()
-    logging.info("Webhook удалён и бот выключен")
 
-# === Запуск ===
 if __name__ == '__main__':
     start_webhook(
         dispatcher=dp,
