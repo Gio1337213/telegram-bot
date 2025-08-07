@@ -150,6 +150,10 @@ async def handle_admin_media(message: types.Message):
 # === Обработка постов из канала ===
 @dp.channel_post_handler()
 async def forward_post(message: types.Message):
+    await bot.send_message(ADMIN_ID, f"🧪 [DEBUG] Получено обновление.\n"
+                                     f"Тип: {message.content_type}\n"
+                                     f"ID канала: {message.chat.id}\n"
+                                     f"Текст: {message.text or message.caption or 'нет'}")
     users = await get_all_users()
     if not users:
         await bot.send_message(ADMIN_ID, "❌ Нет пользователей для рассылки.")
