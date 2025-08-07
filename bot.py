@@ -109,8 +109,17 @@ async def on_startup(app):
     await bot.set_webhook(WEBHOOK_URL)
 
 async def on_shutdown(app):
-    await bot.delete_webhook()
-    await bot.session.close()
+    try:
+        logging.info("🛑 Удаляю Webhook...")
+        await bot.delete_webhook()
+    except Exception as e:
+        logging.warning(f"⚠️ Ошибка при удалении Webhook: {e}")
+
+    try:
+        logging.info("🔒 Закрываю сессию бота...")
+        await bot.session.close()
+    except Exception as e:
+        logging.warning(f"⚠️ Ошибка при закрытии сессии: {e}")
 
 app = get_new_configured_app(dispatcher=dp, path=WEBHOOK_PATH)
 app.on_startup.append(on_startup)
