@@ -1,15 +1,14 @@
 import os
-import logging
 import asyncpg
+import logging
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 from aiogram.dispatcher.filters import CommandStart
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.executor import start_webhook
 
-# === Настройки ===
 API_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_HOST = os.getenv("WEBHOOK_HOST")  # Пример: https://your-app.onrender.com
+WEBHOOK_HOST = os.getenv("WEBHOOK_HOST")
 DB_URL = os.getenv("DATABASE_URL")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 
@@ -18,11 +17,12 @@ WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 WEBAPP_HOST = "0.0.0.0"
 WEBAPP_PORT = int(os.getenv("PORT", 8000))
 
+logging.basicConfig(level=logging.INFO)
+
 bot = Bot(token=API_TOKEN, parse_mode="HTML")
 dp = Dispatcher(bot)
 db_pool = None
 
-# === Клавиатуры ===
 reply_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(KeyboardButton("📢 Каналы"))
 inline_kb = InlineKeyboardMarkup(row_width=1).add(
     InlineKeyboardButton("🏋 ️ Спорт", url="https://t.me/sportsoda"),
@@ -31,7 +31,7 @@ inline_kb = InlineKeyboardMarkup(row_width=1).add(
     InlineKeyboardButton("💡 Фабрика идей", url="https://t.me/your_invest_channel")
 )
 
-# === База данных ===
+# Database
 async def create_pool():
     return await asyncpg.create_pool(dsn=DB_URL)
 
@@ -49,7 +49,7 @@ async def get_users():
         rows = await conn.fetch("SELECT id FROM users")
         return [row["id"] for row in rows]
 
-# === Хендлеры ===
+# Handlers
 @dp.message_handler(CommandStart())
 async def start(message: types.Message):
     await add_user(message.from_user.id)
@@ -57,36 +57,58 @@ async def start(message: types.Message):
         with open("welcome.jpg", "rb") as photo:
             await message.answer_photo(photo, caption="👋 <b>Добро пожаловать!</b>\n\nНажмите кнопку ниже, чтобы посмотреть каналы.", reply_markup=reply_kb)
     except FileNotFoundError:
-        await message.answer("\ud83d\udc4b <b>Добро пожаловать!</b>\n\nНажмите кнопку ниже, чтобы посмотреть каналы.", reply_markup=reply_kb)
+        await message.answer("👋 <b>Добро пожаловать!</b>\n\nНажмите кнопку ниже, чтобы посмотреть каналы.", reply_markup=reply_kb)
 
 @dp.message_handler(lambda msg: msg.text == "📢 Каналы")
 async def channels(message: types.Message):
     await message.answer("Выберите интересующий канал:", reply_markup=inline_kb)
 
-# Рассылка постов
-@dp.channel_post_handler()
+# Debug logging
+@dp.message_handler(content_types=types.ContentType.ANY)
+async def debug_all_messages(msg: types.Message):
+    await bot.send_message(ADMIN_ID, f"[DEBUG MESSAGE] {msg.content_type}")
+
+@dp.channel_post_handler(content_types=types.ContentType.ANY)
 async def debug_channel_post(message: types.Message):
+    await bot.send_message(ADMIN_ID, f"[DEBUG CHANNEL_POST] type: {message.content_type}")
+
+    caption = message.caption or message.text or ""
     try:
-        await bot.send_message(ADMIN_ID, f"📥 Получен пост из канала.\n"
-                                         f"ID: <code>{message.message_id}</code>\n"
-                                         f"Тип: {'Фото' if message.photo else 'Нет фото'}")
+        channel = await bot.get_chat(message.chat.id)
+        from_info = f"<b>📢 Канал:</b> <i>{channel.title}</i>\n\n"
+    except:
+        from_info = ""
 
-        if message.photo:
-            await bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption="✅ Фото получено через webhook")
-        elif message.text:
-            await bot.send_message(ADMIN_ID, f"Текст: {message.text}")
-        else:
-            await bot.send_message(ADMIN_ID, "❓ Неизвестный формат сообщения")
-    except Exception as e:
-        await bot.send_message(ADMIN_ID, f"❌ Ошибка в debug handler: {e}")
+    full_caption = from_info + caption
+    if len(full_caption) > 1024:
+        full_caption = full_caption[:1020] + "..."
 
+    users = await get_users()
+    await bot.send_message(ADMIN_ID, f"📨 Рассылаю пост {message.message_id} {message.content_type} {len(users)} пользователям")
 
-# === Webhook ===
+    for uid in users:
+        try:
+            if message.photo:
+                await bot.send_photo(uid, message.photo[-1].file_id, caption=full_caption)
+            elif message.video:
+                await bot.send_video(uid, message.video.file_id, caption=full_caption)
+            elif message.document:
+                await bot.send_document(uid, message.document.file_id, caption=full_caption)
+            elif message.animation:
+                await bot.send_animation(uid, message.animation.file_id, caption=full_caption)
+            elif message.text:
+                await bot.send_message(uid, full_caption)
+            else:
+                await bot.send_message(uid, from_info + "📌 Новый пост в канале.")
+        except Exception as e:
+            await bot.send_message(ADMIN_ID, f"❌ Не отправлено {uid}: {e}")
+
+# Webhook setup
 async def on_startup(dp):
     global db_pool
     db_pool = await create_pool()
     await bot.set_webhook(WEBHOOK_URL)
-    await bot.send_message(ADMIN_ID, f"Webhook активен: {WEBHOOK_URL}")
+    await bot.send_message(ADMIN_ID, f"✅ Webhook установлен: {WEBHOOK_URL}")
 
 async def on_shutdown(dp):
     await bot.delete_webhook()
