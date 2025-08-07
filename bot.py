@@ -1,6 +1,5 @@
 import os
 import asyncpg
-import re
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 from aiogram.dispatcher.filters import CommandStart
@@ -26,8 +25,8 @@ reply_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(KeyboardButton("📢 К
 inline_kb = InlineKeyboardMarkup(row_width=1).add(
     InlineKeyboardButton("🏋 ️ Спорт", url="https://t.me/sportsoda"),
     InlineKeyboardButton("📜 Профком", url="https://t.me/profkomsoda"),
-    InlineKeyboardButton("📚 ОТиПБ", url="https://t.me/your_invest_channel"),
-    InlineKeyboardButton("💡 Фабрика идей", url="https://t.me/your_invest_channel")
+    InlineKeyboardButton("📚 ОТиПБ", url="https://t.me/sadsad"),
+    InlineKeyboardButton("💡 Фабрика идей", url="https://t.me/FabrikaIdeySoda")
 )
 
 # База данных
