@@ -16,7 +16,7 @@ WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 WEBAPP_HOST = "0.0.0.0"
 WEBAPP_PORT = int(os.getenv("PORT", default=10000))
-DB_URL = os.getenv("postgresql://telegram_bot_db_1nn8_user:Xu7cM4HqwLSlb60RzmScQSz6eCzRSHKG@dpg-d2a5bp15pdvs73ad634g-a/telegram_bot_db_1nn8")  # URL PostgreSQL от Render
+DB_URL = os.getenv("DATABASE_URL")  # URL PostgreSQL от Render
 
 logging.basicConfig(level=logging.INFO)
 
