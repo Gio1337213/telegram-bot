@@ -6,9 +6,8 @@ from aiogram.dispatcher.filters import CommandStart
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.executor import start_webhook
 
-# === Настройки ===
 API_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_HOST = os.getenv("WEBHOOK_HOST")
+WEBHOOK_HOST = os.getenv("WEBHOOK_HOST")  # Пример: https://your-app.onrender.com
 DB_URL = os.getenv("DATABASE_URL")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 
@@ -21,7 +20,7 @@ bot = Bot(token=API_TOKEN, parse_mode="HTML")
 dp = Dispatcher(bot)
 db_pool = None
 
-# === Клавиатуры ===
+# Клавиатуры
 reply_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(KeyboardButton("📢 Каналы"))
 inline_kb = InlineKeyboardMarkup(row_width=1).add(
     InlineKeyboardButton("🏋 ️ Спорт", url="https://t.me/sportsoda"),
@@ -30,7 +29,7 @@ inline_kb = InlineKeyboardMarkup(row_width=1).add(
     InlineKeyboardButton("💡 Фабрика идей", url="https://t.me/your_invest_channel")
 )
 
-# === База данных ===
+# База данных
 async def create_pool():
     return await asyncpg.create_pool(dsn=DB_URL)
 
@@ -48,7 +47,7 @@ async def get_users():
         rows = await conn.fetch("SELECT id FROM users")
         return [row["id"] for row in rows]
 
-# === Хендлеры ===
+# Хендлеры
 @dp.message_handler(CommandStart())
 async def start(message: types.Message):
     await add_user(message.from_user.id)
@@ -62,12 +61,10 @@ async def start(message: types.Message):
 async def channels(message: types.Message):
     await message.answer("Выберите интересующий канал:", reply_markup=inline_kb)
 
-# === Рассылка постов ===
-@dp.channel_post_handler()
+# Обработка постов из канала (включая медиа)
+@dp.channel_post_handler(content_types=types.ContentType.ANY)
 async def forward_post(message: types.Message):
-    users = await get_users()
     caption = message.caption or message.text or ""
-
     try:
         channel = await bot.get_chat(message.chat.id)
         from_info = f"<b>📢 Канал:</b> <i>{channel.title}</i>\n\n"
@@ -77,6 +74,8 @@ async def forward_post(message: types.Message):
     full_caption = from_info + caption
     if len(full_caption) > 1024:
         full_caption = full_caption[:1020] + "..."
+
+    users = await get_users()
 
     for uid in users:
         try:
@@ -93,9 +92,9 @@ async def forward_post(message: types.Message):
             else:
                 await bot.send_message(uid, from_info + "📌 Новый пост в канале.")
         except:
-            pass  # можно логировать ошибки в файл, если нужно
+            pass  # опционально: логировать ошибку для uid
 
-# === Webhook ===
+# Webhook
 async def on_startup(dp):
     global db_pool
     db_pool = await create_pool()
