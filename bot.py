@@ -65,10 +65,6 @@ async def channels(message: types.Message):
 @dp.channel_post_handler(content_types=types.ContentType.ANY)
 async def forward_post(message: types.Message):
     caption = message.caption or message.text or ""
-
-    # Удаляем @упоминания, но оставляем ссылки
-    clean_caption = re.sub(r'@\w+', '', caption).strip()
-
     try:
         channel = await bot.get_chat(message.chat.id)
         if channel.username:
@@ -79,7 +75,7 @@ async def forward_post(message: types.Message):
     except:
         from_info = ""
 
-    full_caption = from_info + clean_caption
+    full_caption = from_info + caption
     if len(full_caption) > 1024:
         full_caption = full_caption[:1020] + "..."
 
@@ -96,11 +92,11 @@ async def forward_post(message: types.Message):
             elif message.animation:
                 await bot.send_animation(uid, message.animation.file_id, caption=full_caption)
             elif message.text:
-                await bot.send_message(uid, full_caption, disable_web_page_preview=True)
+                await bot.send_message(uid, full_caption)
             else:
-                await bot.send_message(uid, from_info + "📌 Новый пост в канале.", disable_web_page_preview=True)
+                await bot.send_message(uid, from_info + "📌 Новый пост в канале.")
         except:
-            pass
+            pass  # опционально: логировать ошибку для uid
 
 # Webhook
 async def on_startup(dp):
