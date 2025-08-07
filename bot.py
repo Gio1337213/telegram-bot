@@ -8,7 +8,7 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMar
 from aiogram.utils.executor import start_webhook
 
 API_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_HOST = os.getenv("WEBHOOK_HOST")  # Пример: https://your-app.onrender.com
+WEBHOOK_HOST = os.getenv("WEBHOOK_HOST")
 DB_URL = os.getenv("DATABASE_URL")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 
@@ -21,24 +21,15 @@ bot = Bot(token=API_TOKEN, parse_mode="HTML")
 dp = Dispatcher(bot)
 db_pool = None
 
-# Данные каналов
 channels_data = {
-    "sportsoda": "🏋 ⃣ Спорт",
+    "sportsoda": "🏋️ Спорт",
     "profkomsoda": "📜 Профком",
     "your_invest_channel": "📚 ОТиПБ",
     "ideas_factory": "💡 Фабрика идей"
 }
 
-# Клавиатуры
 reply_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(KeyboardButton("📢 Каналы"))
 
-def get_subscription_kb():
-    kb = InlineKeyboardMarkup(row_width=1)
-    for username, title in channels_data.items():
-        kb.add(InlineKeyboardButton(title, callback_data=f"subscribe:{username}"))
-    return kb
-
-# База данных
 async def create_pool():
     pool = await asyncpg.create_pool(dsn=DB_URL)
     async with pool.acquire() as conn:
@@ -60,41 +51,58 @@ async def add_user(user_id):
     async with db_pool.acquire() as conn:
         await conn.execute("INSERT INTO users (id) VALUES ($1) ON CONFLICT DO NOTHING", user_id)
 
+async def get_user_subscriptions(user_id):
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("SELECT channel_username FROM user_subscriptions WHERE user_id = $1", user_id)
+        return [row["channel_username"] for row in rows]
+
 async def get_users_by_channel(channel_username):
     async with db_pool.acquire() as conn:
-        rows = await conn.fetch("""
-            SELECT user_id FROM user_subscriptions
-            WHERE channel_username = $1
-        """, channel_username)
+        rows = await conn.fetch("SELECT user_id FROM user_subscriptions WHERE channel_username = $1", channel_username)
         return [row["user_id"] for row in rows]
 
-# Хендлеры
+def get_subscription_kb(user_subs):
+    kb = InlineKeyboardMarkup(row_width=1)
+    for username, title in channels_data.items():
+        subscribed = username in user_subs
+        status = "✅" if subscribed else ""
+        action = "unsubscribe" if subscribed else "subscribe"
+        kb.add(InlineKeyboardButton(f"{status} {title}", callback_data=f"{action}:{username}"))
+    return kb
+
 @dp.message_handler(CommandStart())
 async def start(message: types.Message):
     await add_user(message.from_user.id)
+    subs = await get_user_subscriptions(message.from_user.id)
     try:
         with open("welcome.jpg", "rb") as photo:
             await message.answer_photo(photo, caption="👋 <b>Добро пожаловать!</b>\n\nНажмите кнопку ниже, чтобы выбрать каналы для подписки.", reply_markup=reply_kb)
     except FileNotFoundError:
-        await message.answer("\ud83d\udc4b <b>Добро пожаловать!</b>\n\nНажмите кнопку ниже, чтобы выбрать каналы для подписки.", reply_markup=reply_kb)
+        await message.answer("👋 <b>Добро пожаловать!</b>\n\nНажмите кнопку ниже, чтобы выбрать каналы для подписки.", reply_markup=reply_kb)
 
 @dp.message_handler(lambda msg: msg.text == "📢 Каналы")
 async def channels(message: types.Message):
-    await message.answer("Выберите каналы для подписки:", reply_markup=get_subscription_kb())
+    user_subs = await get_user_subscriptions(message.from_user.id)
+    await message.answer("Выберите каналы для подписки или отписки:", reply_markup=get_subscription_kb(user_subs))
 
-@dp.callback_query_handler(lambda c: c.data.startswith("subscribe:"))
-async def subscribe_channel(callback_query: types.CallbackQuery):
-    channel_username = callback_query.data.split(":")[1]
+@dp.callback_query_handler(lambda c: c.data.startswith("subscribe:") or c.data.startswith("unsubscribe:"))
+async def handle_subscription(callback_query: types.CallbackQuery):
+    action, channel_username = callback_query.data.split(":")
     user_id = callback_query.from_user.id
     async with db_pool.acquire() as conn:
-        await conn.execute("""
-            INSERT INTO user_subscriptions (user_id, channel_username)
-            VALUES ($1, $2)
-            ON CONFLICT DO NOTHING
-        """, user_id, channel_username)
-    await callback_query.answer("Вы подписались!")
+        if action == "subscribe":
+            await conn.execute("""
+                INSERT INTO user_subscriptions (user_id, channel_username)
+                VALUES ($1, $2) ON CONFLICT DO NOTHING
+            """, user_id, channel_username)
+            await callback_query.answer("Подписка оформлена!")
+        elif action == "unsubscribe":
+            await conn.execute("DELETE FROM user_subscriptions WHERE user_id = $1 AND channel_username = $2", user_id, channel_username)
+            await callback_query.answer("Вы отписались!")
 
-# Обработка постов из канала (включая медиа)
+    user_subs = await get_user_subscriptions(user_id)
+    await callback_query.message.edit_reply_markup(reply_markup=get_subscription_kb(user_subs))
+
 @dp.channel_post_handler(content_types=types.ContentType.ANY)
 async def forward_post(message: types.Message):
     caption = message.caption or message.text or ""
@@ -132,7 +140,6 @@ async def forward_post(message: types.Message):
     except:
         pass
 
-# Webhook
 async def on_startup(dp):
     global db_pool
     db_pool = await create_pool()
