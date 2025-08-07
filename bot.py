@@ -85,7 +85,7 @@ async def send_saved_media_to_all_users():
                 elif row["type"] == "text":
                     await bot.send_message(user_id, row["file_id"])
             except Exception as e:
-                logging.warning(f"Ошибка отправки {user_id}: {e}")
+                await bot.send_message(ADMIN_ID, f"⚠️ Ошибка отправки {user_id}: {e}")
 
 # === Команды ===
 @dp.message_handler(CommandStart())
@@ -152,7 +152,7 @@ async def handle_admin_media(message: types.Message):
 async def forward_post(message: types.Message):
     users = await get_all_users()
     if not users:
-        logging.info("[LOG] Нет пользователей для рассылки.")
+        await bot.send_message(ADMIN_ID, "❌ Нет пользователей для рассылки.")
         return
 
     try:
@@ -165,37 +165,29 @@ async def forward_post(message: types.Message):
     if len(caption) > 1024:
         caption = caption[:1020] + "..."
 
-    logging.info(f"[FORWARD] Рассылка {len(users)} пользователям...")
-    logging.info(f"[FORWARD] Тип медиа: "
-                 f"{'photo' if message.photo else ''}"
-                 f"{'video' if message.video else ''}"
-                 f"{'document' if message.document else ''}"
-                 f"{'animation' if message.animation else ''}"
-                 f"{'text' if message.text else ''}")
+    await bot.send_message(
+        ADMIN_ID,
+        f"📨 Получен пост из канала: {message.chat.title}\n"
+        f"👥 Отправляется {len(users)} пользователям.\n"
+        f"📎 Тип: {'photo' if message.photo else 'video' if message.video else 'text'}"
+    )
 
     for user_id in users:
         try:
             if message.photo:
-                logging.info(f"[SEND] photo -> {user_id}")
                 await bot.send_photo(user_id, message.photo[-1].file_id, caption=caption)
             elif message.video:
-                logging.info(f"[SEND] video -> {user_id}")
                 await bot.send_video(user_id, message.video.file_id, caption=caption)
             elif message.document:
-                logging.info(f"[SEND] document -> {user_id}")
                 await bot.send_document(user_id, message.document.file_id, caption=caption)
             elif message.animation:
-                logging.info(f"[SEND] animation -> {user_id}")
                 await bot.send_animation(user_id, message.animation.file_id, caption=caption)
             elif message.text:
-                logging.info(f"[SEND] text -> {user_id}")
                 await bot.send_message(user_id, caption)
             else:
-                logging.warning(f"[SEND] Неизвестный тип -> {user_id}")
                 await bot.send_message(user_id, from_info + "📌 Новый пост в канале.")
         except Exception as e:
-            logging.warning(f"❌ Ошибка отправки {user_id}: {e}")
-
+            await bot.send_message(ADMIN_ID, f"⚠️ Ошибка отправки {user_id}: {e}")
 
 # === Webhook запуск ===
 async def on_startup(dp):
