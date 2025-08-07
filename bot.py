@@ -107,7 +107,10 @@ async def forward_post(message: types.Message):
 async def on_startup(dp):
     global db_pool
     db_pool = await create_pool()
-    await bot.set_webhook(WEBHOOK_URL)
+    await bot.set_webhook(
+    WEBHOOK_URL,
+    allowed_updates=["message", "channel_post"]
+)
 
 async def on_shutdown(dp):
     await bot.delete_webhook()
