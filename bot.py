@@ -66,24 +66,27 @@ async def channels(message: types.Message):
 # Рассылка постов
 @dp.channel_post_handler()
 async def forward_post(message: types.Message):
+    await bot.send_message(ADMIN_ID, f"🟢 Новый пост {message.message_id} из канала {message.chat.id}")
+
     users = await get_users()
     caption = message.caption or message.text or ""
 
     try:
         channel = await bot.get_chat(message.chat.id)
-        from_info = f"<b>\ud83d\udce2 Канал:</b> <i>{channel.title}</i>\n\n"
-    except:
+        from_info = f"<b>📢 Канал:</b> <i>{channel.title}</i>\n\n"
+    except Exception as e:
         from_info = ""
+        await bot.send_message(ADMIN_ID, f"⚠️ Ошибка при получении названия канала:\n{repr(e)}")
 
     full_caption = from_info + caption
     if len(full_caption) > 1024:
         full_caption = full_caption[:1020] + "..."
 
-    await bot.send_message(ADMIN_ID, f"\u2709\ufe0f Пост из канала: {message.message_id}, рассылаю {len(users)} пользователям")
+    await bot.send_message(ADMIN_ID, f"✉️ Рассылаю пост {message.message_id} {len(users)} пользователям")
 
     for uid in users:
         try:
-            if message.photo:
+            if message.photo and len(message.photo) > 0:
                 await bot.send_photo(uid, message.photo[-1].file_id, caption=full_caption)
             elif message.video:
                 await bot.send_video(uid, message.video.file_id, caption=full_caption)
@@ -94,9 +97,10 @@ async def forward_post(message: types.Message):
             elif message.text:
                 await bot.send_message(uid, full_caption)
             else:
-                await bot.send_message(uid, from_info + "\ud83d\udccc Новый пост в канале.")
+                await bot.send_message(uid, from_info + "📌 Новый пост в канале.")
         except Exception as e:
-            await bot.send_message(ADMIN_ID, f"\u274c Не отправлено {uid}: {e}")
+            await bot.send_message(ADMIN_ID, f"❌ Не отправлено {uid}:\n{repr(e)}")
+
 
 # === Webhook ===
 async def on_startup(dp):
