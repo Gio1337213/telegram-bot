@@ -25,8 +25,8 @@ reply_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(KeyboardButton("📢 К
 inline_kb = InlineKeyboardMarkup(row_width=1).add(
     InlineKeyboardButton("🏋 ️ Спорт", url="https://t.me/sportsoda"),
     InlineKeyboardButton("📜 Профком", url="https://t.me/profkomsoda"),
-    InlineKeyboardButton("📚 ОТиПБ", url="https://t.me/sadsad"),
-    InlineKeyboardButton("💡 Фабрика идей", url="https://t.me/FabrikaIdeySoda")
+    InlineKeyboardButton("📚 ОТиПБ", url="https://t.me/your_invest_channel"),
+    InlineKeyboardButton("💡 Фабрика идей", url="https://t.me/your_invest_channel")
 )
 
 # База данных
@@ -65,10 +65,6 @@ async def channels(message: types.Message):
 @dp.channel_post_handler(content_types=types.ContentType.ANY)
 async def forward_post(message: types.Message):
     caption = message.caption or message.text or ""
-
-    # Удаляем @упоминания, но оставляем ссылки
-    clean_caption = re.sub(r'@\w+', '', caption).strip()
-
     try:
         channel = await bot.get_chat(message.chat.id)
         if channel.username:
@@ -79,7 +75,7 @@ async def forward_post(message: types.Message):
     except:
         from_info = ""
 
-    full_caption = from_info + clean_caption
+    full_caption = from_info + caption
     if len(full_caption) > 1024:
         full_caption = full_caption[:1020] + "..."
 
@@ -88,19 +84,19 @@ async def forward_post(message: types.Message):
     for uid in users:
         try:
             if message.photo:
-                await bot.send_photo(uid, message.photo[-1].file_id, caption=full_caption)
+                await bot.send_photo(uid, message.photo[-1].file_id, caption=full_caption, disable_web_page_preview=True)
             elif message.video:
-                await bot.send_video(uid, message.video.file_id, caption=full_caption)
+                await bot.send_video(uid, message.video.file_id, caption=full_caption disable_web_page_preview=True)
             elif message.document:
-                await bot.send_document(uid, message.document.file_id, caption=full_caption)
+                await bot.send_document(uid, message.document.file_id, caption=full_caption disable_web_page_preview=True)
             elif message.animation:
-                await bot.send_animation(uid, message.animation.file_id, caption=full_caption)
+                await bot.send_animation(uid, message.animation.file_id, caption=full_caption disable_web_page_preview=True)
             elif message.text:
                 await bot.send_message(uid, full_caption, disable_web_page_preview=True)
             else:
                 await bot.send_message(uid, from_info + "📌 Новый пост в канале.", disable_web_page_preview=True)
         except:
-            pass
+            pass  # опционально: логировать ошибку для uid
 
 # Webhook
 async def on_startup(dp):
