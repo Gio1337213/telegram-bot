@@ -1,29 +1,27 @@
 import os
-import json
 import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.dispatcher.filters import CommandStart
 from aiogram.dispatcher.webhook import get_new_configured_app
 from aiohttp import web
-from aiohttp import ClientSession
-from pathlib import Path
+import asyncpg
 
-# === Настройка ===
+# === Настройки ===
 API_TOKEN = os.getenv("API_TOKEN")
 WEBHOOK_HOST = os.getenv("WEBHOOK_HOST", "https://telegram-bot-fa47.onrender.com")
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 WEBAPP_HOST = "0.0.0.0"
 WEBAPP_PORT = int(os.getenv("PORT", default=10000))
-USERS_FILE = "users.json"
-MEDIA_DIR = "media"
+DB_URL = os.getenv("DATABASE_URL")  # Render должен добавить эту переменную автоматически
 
 logging.basicConfig(level=logging.INFO)
 
 # === Инициализация ===
 bot = Bot(token=API_TOKEN, parse_mode="HTML")
 dp = Dispatcher(bot)
+db_pool = None  # глобальная переменная для пула соединений
 
 # === Интерфейс ===
 reply_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(KeyboardButton("📢 Каналы"))
@@ -35,24 +33,23 @@ inline_kb = InlineKeyboardMarkup(row_width=1).add(
     InlineKeyboardButton("🧠 Что такое БСА", url="https://t.me/your_invest_channel"),
 )
 
-# === Работа с пользователями ===
-def load_users():
-    if os.path.exists(USERS_FILE):
-        with open(USERS_FILE, "r") as f:
-            return json.load(f)
-    return []
+# === Работа с пользователями через PostgreSQL ===
+async def create_pool():
+    return await asyncpg.create_pool(dsn=DB_URL)
 
-def save_user(user_id):
-    users = load_users()
-    if user_id not in users:
-        users.append(user_id)
-        with open(USERS_FILE, "w") as f:
-            json.dump(users, f)
+async def add_user(user_id):
+    async with db_pool.acquire() as conn:
+        await conn.execute("INSERT INTO users (id) VALUES ($1) ON CONFLICT DO NOTHING", user_id)
+
+async def get_all_users():
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("SELECT id FROM users")
+        return [row["id"] for row in rows]
 
 # === Старт ===
 @dp.message_handler(CommandStart())
 async def start(message: types.Message):
-    save_user(message.from_user.id)
+    await add_user(message.from_user.id)
     caption = "👋 <b>Добро пожаловать!</b>\n\nНажмите кнопку ниже, чтобы посмотреть каналы."
     try:
         with open("welcome.jpg", "rb") as photo:
@@ -64,12 +61,12 @@ async def start(message: types.Message):
 async def show_channels(message: types.Message):
     await message.answer("Выберите интересующий канал:", reply_markup=inline_kb)
 
-# === Рассылка постов из канала (с загрузкой медиа) ===
+# === Рассылка постов из канала ===
 @dp.channel_post_handler()
 async def forward_post(message: types.Message):
-    users = load_users()
+    users = await get_all_users()
     if not users:
-        print("[LOG] Нет пользователей для рассылки.")
+        logging.info("[LOG] Нет пользователей для рассылки.")
         return
 
     try:
@@ -79,12 +76,11 @@ async def forward_post(message: types.Message):
         from_info = ""
 
     caption = from_info + (message.caption or message.text or "")
-
     if len(caption) > 1024:
         caption = caption[:1020] + "..."
 
-    print(f"[LOG] Получен пост из канала: {channel.title if 'channel' in locals() else message.chat.id}")
-    print(f"[LOG] Рассылка {len(users)} пользователям...")
+    logging.info(f"[LOG] Получен пост из канала: {channel.title if 'channel' in locals() else message.chat.id}")
+    logging.info(f"[LOG] Рассылка {len(users)} пользователям...")
 
     for user_id in users:
         try:
@@ -101,10 +97,22 @@ async def forward_post(message: types.Message):
             else:
                 await bot.send_message(user_id, from_info + "📌 Новый пост в канале.")
         except Exception as e:
-            print(f"❌ Ошибка отправки {user_id}: {e}")
+            logging.error(f"❌ Ошибка отправки {user_id}: {e}")
 
-# === Вебхук ===
+# === Вебхук и создание таблицы ===
 async def on_startup(app):
+    global db_pool
+    db_pool = await create_pool()
+
+    # Создание таблицы при старте бота
+    async with db_pool.acquire() as conn:
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id BIGINT PRIMARY KEY
+            );
+        """)
+        logging.info("✅ Таблица 'users' создана или уже существует.")
+
     logging.info(f"📡 Устанавливаю Webhook: {WEBHOOK_URL}")
     await bot.set_webhook(WEBHOOK_URL)
 
