@@ -66,10 +66,9 @@ async def channels(message: types.Message):
 @dp.channel_post_handler(content_types=types.ContentType.ANY)
 async def forward_post(message: types.Message):
     caption = message.caption or message.text or ""
-    
-    # Очистка caption от ссылок на Telegram и упоминаний
-    clean_caption = re.sub(r'https?://t\.me/\S+', '', caption)
-    clean_caption = re.sub(r'@\w+', '', clean_caption)
+
+    # Удаляем @упоминания, но оставляем ссылки
+    clean_caption = re.sub(r'@\w+', '', caption).strip()
 
     try:
         channel = await bot.get_chat(message.chat.id)
@@ -81,7 +80,7 @@ async def forward_post(message: types.Message):
     except:
         from_info = ""
 
-    full_caption = from_info + clean_caption.strip()
+    full_caption = from_info + clean_caption
     if len(full_caption) > 1024:
         full_caption = full_caption[:1020] + "..."
 
@@ -102,7 +101,7 @@ async def forward_post(message: types.Message):
             else:
                 await bot.send_message(uid, from_info + "📌 Новый пост в канале.", disable_web_page_preview=True)
         except:
-            pass  # опционально: логировать ошибку для uid
+            pass
 
 # Webhook
 async def on_startup(dp):
