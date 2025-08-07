@@ -5,7 +5,7 @@ from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.dispatcher.filters import CommandStart
-from aiogram.dispatcher.webhook import WebhookRequestHandler
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
 # === Настройки окружения ===
 API_TOKEN = os.getenv("BOT_TOKEN")
@@ -130,8 +130,11 @@ async def on_shutdown(app):
     except:
         pass
 
+
 app = web.Application()
-app.router.add_post(WEBHOOK_PATH, WebhookRequestHandler(dispatcher=dp))
+SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
+setup_application(app, dp, bot=bot)
+
 app.on_startup.append(on_startup)
 app.on_shutdown.append(on_shutdown)
 
